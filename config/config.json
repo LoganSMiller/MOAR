@@ -1,4 +1,6 @@
 {
+  "defaultPreset": "live-like",
+
   "enableBotSpawning": true,
   "spawnSmoothing": true,
 
@@ -25,7 +27,7 @@
   "sniperGroupChance": 0.1,
   "scavGroupChance": 0.2,
   "pmcGroupChance": 0.2,
-  
+
   "pmcMaxGroupSize": 4,
   "scavMaxGroupSize": 3,
   "sniperMaxGroupSize": 1,

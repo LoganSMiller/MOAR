@@ -36,8 +36,8 @@
     "gradualBossInvasion": true
   },
   "rogue-invasion": {
-    "randomRaiderGroup": true,
-    "randomRaiderGroupChance": 100
+    "randomRogueGroup": true,
+    "randomRogueGroupChance": 100
   },
   "raider-invasion": {
     "randomRaiderGroup": true,
