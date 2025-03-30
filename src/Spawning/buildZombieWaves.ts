@@ -1,80 +1,79 @@
-import { ILocation } from "@spt/models/eft/common/ILocation";
+import {ILocation} from "@spt/models/eft/common/ILocation";
 import _config from "../../config/config.json";
 import mapConfig from "../../config/mapConfig.json";
-import { configLocations, defaultEscapeTimes } from "./constants";
+import {configLocations, defaultEscapeTimes} from "./constants";
 import {
-  buildZombie,
-  getHealthBodyPartsByPercentage,
-  zombieTypes,
+    buildZombie,
+    getHealthBodyPartsByPercentage,
+    zombieTypes
 } from "./utils";
-import { IBots } from "@spt/models/spt/bots/IBots";
+import {IBots} from "@spt/models/spt/bots/IBots";
 
 export default function buildZombieWaves(
-  config: typeof _config,
-  locationList: ILocation[],
-  bots: IBots
+    config: typeof _config,
+    locationList: ILocation[],
+    bots: IBots
 ) {
-  let { debug, zombieWaveDistribution, zombieWaveQuantity, zombieHealth } =
-    config;
+    const {debug, zombieWaveDistribution, zombieWaveQuantity, zombieHealth} =
+        config;
 
-  const zombieBodyParts = getHealthBodyPartsByPercentage(zombieHealth);
-  zombieTypes.forEach((type) => {
-    bots.types?.[type]?.health?.BodyParts?.forEach((_, index) => {
-      bots.types[type].health.BodyParts[index] = zombieBodyParts;
+    const zombieBodyParts = getHealthBodyPartsByPercentage(zombieHealth);
+    zombieTypes.forEach((type) => {
+        bots.types?.[type]?.health?.BodyParts?.forEach((_, index) => {
+            bots.types[type].health.BodyParts[index] = zombieBodyParts;
+        });
     });
-  });
 
-  for (let indx = 0; indx < locationList.length; indx++) {
-    const location = locationList[indx].base;
-    const mapSettingsList = Object.keys(mapConfig) as Array<
-      keyof typeof mapConfig
-    >;
-    const map = mapSettingsList[indx];
+    for (let index = 0; index < locationList.length; index++) {
+        const location = locationList[index].base;
+        const mapSettingsList = Object.keys(mapConfig) as Array<keyof typeof mapConfig>;
+        const map = mapSettingsList[index];
 
-    const { zombieWaveCount } = mapConfig?.[configLocations[indx]];
+        // eslint-disable-next-line no-unsafe-optional-chaining
+        const {zombieWaveCount} = mapConfig?.[configLocations[index]];
 
-    // if (location.Events?.Halloween2024?.MaxCrowdAttackSpawnLimit)
-    //   location.Events.Halloween2024.MaxCrowdAttackSpawnLimit = 100;
-    // if (location.Events?.Halloween2024?.CrowdCooldownPerPlayerSec)
-    //   location.Events.Halloween2024.CrowdCooldownPerPlayerSec = 60;
-    // if (location.Events?.Halloween2024?.CrowdCooldownPerPlayerSec)
-    //   location.Events.Halloween2024.CrowdsLimit = 10;
-    // if (location.Events?.Halloween2024?.CrowdAttackSpawnParams)
-    //   location.Events.Halloween2024.CrowdAttackSpawnParams = [];
+        // if (location.Events?.Halloween2024?.MaxCrowdAttackSpawnLimit)
+        //   location.Events.Halloween2024.MaxCrowdAttackSpawnLimit = 100;
+        // if (location.Events?.Halloween2024?.CrowdCooldownPerPlayerSec)
+        //   location.Events.Halloween2024.CrowdCooldownPerPlayerSec = 60;
+        // if (location.Events?.Halloween2024?.CrowdCooldownPerPlayerSec)
+        //   location.Events.Halloween2024.CrowdsLimit = 10;
+        // if (location.Events?.Halloween2024?.CrowdAttackSpawnParams)
+        //   location.Events.Halloween2024.CrowdAttackSpawnParams = [];
 
-    if (!zombieWaveCount) return;
+        if (!zombieWaveCount) return;
 
-    const escapeTimeLimitRatio = Math.round(
-      locationList[indx].base.EscapeTimeLimit / defaultEscapeTimes[map]
-    );
+        const escapeTimeLimitRatio = Math.round(
+            locationList[index].base.EscapeTimeLimit / defaultEscapeTimes[map]
+        );
 
-    const zombieTotalWaveCount = Math.round(
-      zombieWaveCount * zombieWaveQuantity * escapeTimeLimitRatio
-    );
+        const zombieTotalWaveCount = Math.round(
+            zombieWaveCount * zombieWaveQuantity * escapeTimeLimitRatio
+        );
 
-    config.debug &&
-      escapeTimeLimitRatio !== 1 &&
-      console.log(
-        `${map} Zombie wave count changed from ${zombieWaveCount} to ${zombieTotalWaveCount} due to escapeTimeLimit adjustment`
-      );
+        config.debug &&
+        escapeTimeLimitRatio !== 1 &&
+        console.log(
+            `${map} Zombie wave count changed from ${zombieWaveCount} to ${zombieTotalWaveCount} due to escapeTimeLimit adjustment`
+        );
 
-    const zombieWaves = buildZombie(
-      zombieTotalWaveCount,
-      location.EscapeTimeLimit * 60,
-      zombieWaveDistribution,
-      9999
-    );
+        const zombieWaves = buildZombie(
+            zombieTotalWaveCount,
+            location.EscapeTimeLimit * 60,
+            zombieWaveDistribution,
+            9999
+        );
 
-    debug &&
-      console.log(
-        configLocations[indx],
-        " generated ",
-        zombieWaves.length,
-        "Zombies"
-      );
+        debug &&
+        console.log(
+            configLocations[index],
+            " generated ",
+            zombieWaves.length,
+            "Zombies"
+        );
 
-    location.BossLocationSpawn.push(...zombieWaves);
+        location.BossLocationSpawn.push(...zombieWaves);
 
-    // console.log(zombieWaves[0], zombieWaves[7]);
-  }
+        // console.log(zombieWaves[0], zombieWaves[7]);
+    }
 }
