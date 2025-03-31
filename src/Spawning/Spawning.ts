@@ -1,5 +1,10 @@
+<<<<<<< Updated upstream
 import { IBotConfig } from "@spt/models/spt/config/IBotConfig.d";
 import { IPmcConfig } from "@spt/models/spt/config/IPmcConfig.d";
+=======
+import { IBotConfig } from "@spt/models/spt/config/IBotConfig";
+import { IPmcConfig } from "@spt/models/spt/config/IPmcConfig";
+>>>>>>> Stashed changes
 import { DatabaseServer } from "@spt/servers/DatabaseServer";
 import _config from "../../config/config.json";
 import _mapConfig from "../../config/mapConfig.json";
@@ -12,7 +17,11 @@ import {
   getRandomPresetOrCurrentlySelectedPreset,
   saveToFile,
 } from "../utils";
+<<<<<<< Updated upstream
 import { ILocationConfig } from "@spt/models/spt/config/ILocationConfig.d";
+=======
+import { ILocationConfig } from "@spt/models/spt/config/ILocationConfig";
+>>>>>>> Stashed changes
 import { originalMapList } from "./constants";
 import { buildBossWaves } from "./buildBossWaves";
 import buildZombieWaves from "./buildZombieWaves";
@@ -24,6 +33,7 @@ import updateSpawnLocations from "./updateSpawnLocations";
 import marksmanChanges from "./marksmanChanges";
 import advancedConfig from "../../config/advancedConfig.json";
 
+<<<<<<< Updated upstream
 export const buildWaves = (container: DependencyContainer) => {
   const configServer = container.resolve<ConfigServer>("ConfigServer");
   const Logger = container.resolve<ILogger>("WinstonLogger");
@@ -178,4 +188,145 @@ export const buildWaves = (container: DependencyContainer) => {
       locations[name] = locationList[index];
     }
   });
+=======
+/**
+ * Entry point for applying all custom bot wave generation logic.
+ * Merges settings, resets maps, applies preset, builds PMCs, Scavs, Snipers, Zombies, and Boss waves.
+ */
+export const buildWaves = (container: DependencyContainer): void => {
+    const configServer = container.resolve<ConfigServer>("ConfigServer");
+    const logger = container.resolve<ILogger>("WinstonLogger");
+
+    const pmcConfig = configServer.getConfig<IPmcConfig>(ConfigTypes.PMC);
+    const botConfig = configServer.getConfig<IBotConfig>(ConfigTypes.BOT);
+    const locationConfig = configServer.getConfig<ILocationConfig>(ConfigTypes.LOCATION);
+
+    // Basic location config tuning
+    locationConfig.rogueLighthouseSpawnTimeSettings.waitTimeSeconds = 60;
+    locationConfig.enableBotTypeLimits = false;
+    locationConfig.fitLootIntoContainerAttempts = 1;
+    locationConfig.addCustomBotWavesToMaps = false;
+    locationConfig.customWaves = { boss: {}, normal: {} };
+
+    const databaseServer = container.resolve<DatabaseServer>("DatabaseServer");
+    const { locations, bots } = databaseServer.getTables();
+
+    // Clone base config and override with runtime values
+    const config = cloneDeep(globalValues.baseConfig) as typeof _config;
+    const preset = getRandomPresetOrCurrentlySelectedPreset();
+
+    // Override config keys
+    for (const key of Object.keys(globalValues.overrideConfig)) {
+        const override = globalValues.overrideConfig[key];
+        if (config[key] !== override) {
+            if (config.debug) {
+                console.log(`[MOAR] overrideConfig ${key} changed from ${config[key]} to ${override}`);
+            }
+            config[key] = override;
+        }
+    }
+
+    // Apply preset if different from config
+    for (const key of Object.keys(preset)) {
+        if (config[key] !== preset[key]) {
+            if (config.debug) {
+                console.log(`[MOAR] preset ${globalValues.currentPreset}: ${key} changed from ${config[key]} to ${preset[key]}`);
+            }
+            config[key] = preset[key];
+        }
+    }
+
+    console.log(`[MOAR] Using preset: ${globalValues.forcedPreset || globalValues.currentPreset}`);
+
+    // Get live location references
+    const {
+        bigmap: customs,
+        factory4_day: factoryDay,
+        factory4_night: factoryNight,
+        interchange,
+        laboratory,
+        lighthouse,
+        rezervbase,
+        shoreline,
+        tarkovstreets,
+        woods,
+        sandbox: gzLow,
+        sandbox_high: gzHigh
+    } = locations;
+
+    let locationList = [
+        customs, factoryDay, factoryNight, interchange, laboratory,
+        lighthouse, rezervbase, shoreline, tarkovstreets, woods,
+        gzLow, gzHigh
+    ];
+
+    // Reset or restore from global cache
+    if (!globalValues.locationsBase) {
+        globalValues.locationsBase = locationList.map(loc => cloneDeep(loc.base));
+    } else {
+        locationList = locationList.map((loc, i) => ({
+            ...loc,
+            base: cloneDeep(globalValues.locationsBase[i])
+        }));
+    }
+
+    // Disable PMC conversion for bots
+    pmcConfig.convertIntoPmcChance = {
+        default: {
+            assault: { min: 0, max: 0 },
+            cursedassault: { min: 0, max: 0 },
+            pmcbot: { min: 0, max: 0 },
+            exusec: { min: 0, max: 0 },
+            arenafighter: { min: 0, max: 0 },
+            arenafighterevent: { min: 0, max: 0 },
+            crazyassaultevent: { min: 0, max: 0 }
+        },
+        factory4_day: { assault: { min: 0, max: 0 } },
+        laboratory: { pmcbot: { min: 0, max: 0 } },
+        rezervbase: { pmcbot: { min: 0, max: 0 } }
+    };
+
+    // Safety catch: If using starting PMCs, turn off smoothing cascade
+    if (config.startingPmcs && (!config.randomSpawns || config.spawnSmoothing)) {
+        logger.warning("[MOAR] Starting PMCs enabled. Disabling spawn smoothing/cascade fallback.");
+        config.spawnSmoothing = false;
+        config.randomSpawns = true;
+    }
+
+    if (advancedConfig.MarksmanDifficultyChanges) {
+        marksmanChanges(bots);
+    }
+
+    // Update static spawn point modifiers before wave generation
+    updateSpawnLocations(locationList, config);
+
+    // Sync escape time overrides
+    setEscapeTimeOverrides(locationList, _mapConfig, logger, config);
+
+    // Start applying wave systems
+    buildBossWaves(config, locationList);
+
+    if (config.zombiesEnabled) {
+        buildZombieWaves(config, locationList, bots);
+    }
+
+    buildPmcs(config, locationList);
+    buildScavMarksmanWaves(config, locationList, botConfig);
+
+    if (config.spawnSmoothing) {
+        enforceSmoothing(locationList);
+    }
+
+    // Inject final data back into locations table
+    originalMapList.forEach((name, index) => {
+        if (!locations[name]) {
+            console.log(`[MOAR] OH CRAP: Missing location reference ${name}`);
+        } else {
+            locations[name] = locationList[index];
+        }
+    });
+
+    // Uncomment for debugging spawn state:
+    // saveToFile(locations.bigmap.base.SpawnPointParams, "spawns.json");
+>>>>>>> Stashed changes
 };

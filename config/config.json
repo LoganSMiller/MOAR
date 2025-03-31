@@ -1,49 +1,59 @@
 {
+<<<<<<< Updated upstream
+=======
+  "defaultPreset": "live-like",
+>>>>>>> Stashed changes
   "enableBotSpawning": true,
   "spawnSmoothing": true,
+  "randomSpawns": false,
+  "startingPmcs": false,
 
   "pmcDifficulty": 0.6,
   "scavDifficulty": 0.4,
-
-  "scavWaveDistribution": 1,
-  "scavWaveQuantity": 1,
-
-  "startingPmcs": false,
-  "pmcWaveDistribution": 0.6,
-  "pmcWaveQuantity": 1,
-
-  "randomSpawns": false,
-
-  "zombiesEnabled": false,
-  "zombieWaveDistribution": 0.8,
-  "zombieWaveQuantity": 1,
   "zombieHealth": 1,
 
-  "maxBotCap": 20,
-  "maxBotPerZone": 6,
+  "pmcWaveQuantity": 1,
+  "scavWaveQuantity": 1,
+  "zombieWaveQuantity": 1,
 
-  "sniperGroupChance": 0.1,
-  "scavGroupChance": 0.2,
+  "pmcWaveDistribution": 0.6,
+  "scavWaveDistribution": 1,
+  "zombieWaveDistribution": 0.8,
+
   "pmcGroupChance": 0.2,
+<<<<<<< Updated upstream
   
+=======
+  "scavGroupChance": 0.2,
+  "sniperGroupChance": 0.1,
+
+>>>>>>> Stashed changes
   "pmcMaxGroupSize": 4,
   "scavMaxGroupSize": 3,
   "sniperMaxGroupSize": 1,
 
+  "maxBotCap": 20,
+  "maxBotPerZone": 6,
+
   "bossOpenZones": false,
-
-  "randomRaiderGroup": false,
-  "randomRaiderGroupChance": 10,
-
-  "randomRogueGroup": false,
-  "randomRogueGroupChance": 10,
-
   "disableBosses": false,
   "mainBossChanceBuff": 0,
-
   "bossInvasion": false,
   "bossInvasionSpawnChance": 5,
   "gradualBossInvasion": true,
+  "enableBossOverrides": true,
 
-  "debug": false
+  "randomRaiderGroup": false,
+  "randomRaiderGroupChance": 10,
+  "randomRogueGroup": false,
+  "randomRogueGroupChance": 10,
+
+  "zombiesEnabled": false,
+  "forceHotzonesOnly": false,
+
+  "debug": {
+    "enabled": false,
+    "logSpawnData": false,
+    "logBossOverrides": false
+  }
 }

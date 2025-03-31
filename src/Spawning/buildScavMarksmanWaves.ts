@@ -5,11 +5,15 @@ import { defaultEscapeTimes, originalMapList } from "./constants";
 import { buildBotWaves, looselyShuffle, MapSettings, shuffle } from "./utils";
 import { WildSpawnType } from "@spt/models/eft/common/ILocationBase";
 import { IBotConfig } from "@spt/models/spt/config/IBotConfig";
+<<<<<<< Updated upstream
 import { saveToFile } from "../utils";
+=======
+>>>>>>> Stashed changes
 import getSortedSpawnPointList from "./spawnZoneUtils";
 import { globalValues } from "../GlobalValues";
 
 export default function buildScavMarksmanWaves(
+<<<<<<< Updated upstream
   config: typeof _config,
   locationList: ILocation[],
   botConfig: IBotConfig
@@ -53,6 +57,141 @@ export default function buildScavMarksmanWaves(
     ) {
       locationList[index].base.BotStop =
         locationList[index].base.EscapeTimeLimit * 60;
+=======
+    config: typeof _config,
+    locationList: ILocation[],
+    botConfig: IBotConfig
+): void {
+    const {
+        maxBotCap,
+        scavWaveQuantity,
+        scavWaveDistribution,
+        sniperMaxGroupSize,
+        maxBotPerZone,
+        scavMaxGroupSize,
+        scavDifficulty,
+        sniperGroupChance,
+        scavGroupChance,
+        debug
+    } = config;
+
+    for (let index = 0; index < locationList.length; index++) {
+        const mapName = Object.keys(mapConfig)[index] as keyof typeof mapConfig;
+        const location = locationList[index];
+        const mapSettings: MapSettings = mapConfig[mapName];
+
+        const escapeTimeLimit = mapSettings.EscapeTimeLimit || location.base.EscapeTimeLimit;
+        location.base.EscapeTimeLimit = escapeTimeLimit;
+        location.base.exit_access_time = escapeTimeLimit + 1;
+
+        const cap = mapSettings.maxBotCapOverride || maxBotCap;
+        const perZone = mapSettings.maxBotPerZoneOverride || maxBotPerZone;
+        if (cap) {
+            location.base.BotMax = cap;
+            location.base.BotMaxPvE = cap;
+            location.base.BotMaxPlayer = cap;
+            botConfig.maxBotCap[originalMapList[index]] = cap;
+        }
+        if (perZone) location.base.MaxBotPerZone = perZone;
+
+        location.base = {
+            ...location.base,
+            NewSpawn: false,
+            OcculsionCullingEnabled: true,
+            OfflineNewSpawn: false,
+            OfflineOldSpawn: true,
+            OldSpawn: true,
+            BotSpawnCountStep: 0,
+            NonWaveGroupScenario: { Enabled: false },
+            BotStartPlayer: 0,
+            BotStop: escapeTimeLimit * 60,
+            waves: []
+        };
+
+        const { Position: { x, y, z } } = globalValues.playerSpawn;
+
+        const sniperSpawns = getSortedSpawnPointList(
+            location.base.SpawnPointParams.filter(p => p.type === "sniper"),
+            x, y, z
+        );
+        const sniperZones = sniperSpawns.map(s => s.BotZoneName);
+        const sniperIds = new Set(sniperSpawns.map(s => s.Id));
+
+        for (const point of location.base.SpawnPointParams) {
+            if (sniperIds.has(point.Id)) point.DelayToCanSpawnSec = 20;
+        }
+
+        if (sniperZones.length > 0) {
+            location.base.MinMaxBots = [{
+                WildSpawnType: WildSpawnType.MARKSMAN,
+                max: sniperZones.length * 5,
+                min: sniperZones.length
+            }];
+        }
+
+        let scavZones = getSortedSpawnPointList(
+            location.base.SpawnPointParams.filter(p => p.type === "scav"),
+            x, y, z, 0.1
+        ).map(s => s.BotZoneName);
+
+        looselyShuffle(scavZones, 4);
+
+        const timeLimit = escapeTimeLimit * 60;
+        const ratio = Math.round(escapeTimeLimit / defaultEscapeTimes[mapName]);
+
+        let scavWaveCount = Math.round((mapSettings.scavWaveCount || 1) * scavWaveQuantity * ratio);
+        if (mapSettings.scavHotZones?.length && scavWaveCount > 0) {
+            scavWaveCount += mapSettings.scavHotZones.length;
+        }
+
+        while (scavWaveCount - scavZones.length > 0) {
+            scavZones = [...scavZones, ...scavZones];
+            if (scavZones.length === 0) scavZones = [""];
+        }
+
+        if (debug && ratio !== 1) {
+            console.log(`[MOAR] ${mapName} scav wave ratio applied. New count: ${scavWaveCount}`);
+        }
+
+        const snipers = buildBotWaves(
+            Math.min(mapSettings.sniperQuantity || 1, sniperZones.length),
+            timeLimit,
+            sniperMaxGroupSize,
+            sniperGroupChance,
+            sniperZones,
+            0.8,
+            WildSpawnType.MARKSMAN,
+            true,
+            0.3,
+            25
+        );
+
+        if (config.randomSpawns) scavZones = shuffle(scavZones);
+
+        const scavs = buildBotWaves(
+            scavWaveCount,
+            timeLimit,
+            scavMaxGroupSize,
+            scavGroupChance,
+            scavZones,
+            scavDifficulty,
+            WildSpawnType.ASSAULT,
+            false,
+            scavWaveDistribution,
+            mapSettings.initialSpawnDelay + Math.round(10 * Math.random())
+        );
+
+        for (const hotzone of mapSettings.scavHotZones || []) {
+            const idx = Math.floor(Math.random() * scavs.length);
+            scavs[idx].BossZone = hotzone;
+        }
+
+        location.base.BossLocationSpawn = [
+            ...snipers,
+            ...scavs,
+            ...location.base.BossLocationSpawn
+        ];
+>>>>>>> Stashed changes
     }
 
     const {

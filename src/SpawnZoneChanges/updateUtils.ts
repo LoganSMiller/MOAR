@@ -1,5 +1,6 @@
 import { Ixyz } from "@spt/models/eft/common/Ixyz";
 import { getDistance } from "../Spawning/spawnZoneUtils";
+<<<<<<< Updated upstream
 
 const fs = require("fs");
 const path = require("path");
@@ -45,9 +46,46 @@ export const updateJsonFile = <T>(
       }
     );
   });
+=======
+import fs from "fs";
+import path from "path";
+
+const SPAWN_DIR = path.resolve(__dirname, "../../config/Spawns");
+
+/**
+ * Update a JSON file using a transformation callback.
+ */
+export const updateJsonFile = <T>(
+    filePath: string,
+    callback: (jsonData: any) => void,
+    successMessage: string
+): void => {
+    fs.readFile(filePath, "utf8", (err, data) => {
+        if (err) return console.error("[MOAR] Failed to read file:", err);
+
+        let jsonData: any;
+        try {
+            jsonData = JSON.parse(data);
+        } catch (parseErr) {
+            console.error("[MOAR] JSON parse error:", parseErr);
+            return;
+        }
+
+        callback(jsonData);
+
+        fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), "utf8", (writeErr) => {
+            if (writeErr) return console.error("[MOAR] Failed to write file:", writeErr);
+            console.log(`[MOAR] ${successMessage}`);
+        });
+    });
+>>>>>>> Stashed changes
 };
 
+/**
+ * Append a bot spawn point to the JSON config file.
+ */
 export const updateBotSpawn = (
+<<<<<<< Updated upstream
   map: string,
   value: Ixyz,
   type: "player" | "pmc" | "scav" | "sniper"
@@ -65,9 +103,27 @@ export const updateBotSpawn = (
     },
     "Successfully added one bot spawn to " + map
   );
+=======
+    map: string,
+    value: Ixyz,
+    type: "player" | "pmc" | "scav" | "sniper"
+): void => {
+    const filePath = path.join(SPAWN_DIR, `${type}Spawns.json`);
+    const key = map.toLowerCase();
+
+    updateJsonFile<Ixyz>(filePath, (jsonData) => {
+        value.y += 0.5;
+        if (!jsonData[key]) jsonData[key] = [];
+        jsonData[key].push(value);
+    }, `Added ${type} spawn to ${map}`);
+>>>>>>> Stashed changes
 };
 
+/**
+ * Remove the closest bot spawn point to a given position.
+ */
 export const deleteBotSpawn = (
+<<<<<<< Updated upstream
   map: string,
   value: Ixyz,
   type: "player" | "pmc" | "scav" | "sniper"
@@ -97,9 +153,43 @@ export const deleteBotSpawn = (
     },
     "Successfully removed one bot spawn from "
   );
+=======
+    map: string,
+    value: Ixyz,
+    type: "player" | "pmc" | "scav" | "sniper"
+): void => {
+    const filePath = path.join(SPAWN_DIR, `${type}Spawns.json`);
+    const key = map.toLowerCase();
+
+    updateJsonFile<Ixyz>(filePath, (jsonData) => {
+        if (!jsonData[key]) return;
+
+        const { x: X, y: Y, z: Z } = value;
+        let nearestIndex = -1;
+        let shortest = Infinity;
+
+        jsonData[key].forEach(({ x, y, z }, index) => {
+            const dist = getDistance(x, y, z, X, Y, Z);
+            if (dist < shortest) {
+                shortest = dist;
+                nearestIndex = index;
+            }
+        });
+
+        if (nearestIndex !== -1) {
+            jsonData[key].splice(nearestIndex, 1);
+        } else {
+            console.warn(`[MOAR] No close spawn found to delete on ${map}`);
+        }
+    }, `Removed ${type} spawn from ${map}`);
+>>>>>>> Stashed changes
 };
 
+/**
+ * Overwrites all bot spawns for a given type.
+ */
 export const updateAllBotSpawns = (
+<<<<<<< Updated upstream
   values: Record<string, Ixyz[]>,
   targetType: string
 ) =>
@@ -110,3 +200,16 @@ export const updateAllBotSpawns = (
     },
     "Successfully updated all Spawns"
   );
+=======
+    values: Record<string, Ixyz[]>,
+    targetType: string
+): void => {
+    const filePath = path.join(SPAWN_DIR, `${targetType}.json`);
+
+    updateJsonFile<Ixyz>(filePath, (jsonData) => {
+        Object.keys(values).forEach((map) => {
+            jsonData[map] = values[map];
+        });
+    }, `Overwrote all ${targetType} spawns`);
+};
+>>>>>>> Stashed changes

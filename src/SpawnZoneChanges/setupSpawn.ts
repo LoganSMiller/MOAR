@@ -6,6 +6,7 @@ import advancedConfig from "../../config/advancedConfig.json";
 import { ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
 import { globalValues } from "../GlobalValues";
 import {
+<<<<<<< Updated upstream
   AddCustomBotSpawnPoints,
   BuildCustomPlayerSpawnPoints,
   AddCustomPmcSpawnPoints,
@@ -13,11 +14,21 @@ import {
   cleanClosest,
   getClosestZone,
   removeClosestSpawnsFromCustomBots,
+=======
+    AddCustomBotSpawnPoints,
+    BuildCustomPlayerSpawnPoints,
+    AddCustomPmcSpawnPoints,
+    AddCustomSniperSpawnPoints,
+    cleanClosest,
+    getClosestZone,
+    removeClosestSpawnsFromCustomBots
+>>>>>>> Stashed changes
 } from "../Spawning/spawnZoneUtils";
 import { shuffle } from "../Spawning/utils";
 import { PlayerSpawns, PmcSpawns, ScavSpawns, SniperSpawns } from ".";
 import { updateAllBotSpawns } from "./updateUtils";
 
+<<<<<<< Updated upstream
 export const setupSpawns = (container: DependencyContainer) => {
   const databaseServer = container.resolve<DatabaseServer>("DatabaseServer");
   const { locations } = databaseServer.getTables();
@@ -82,10 +93,65 @@ export const setupSpawns = (container: DependencyContainer) => {
           default:
             scavSpawns.push(point);
             break;
+=======
+/**
+ * Initializes and processes spawn point data across all maps.
+ * Cleans, categorizes, and optionally removes redundant spawn points.
+ */
+export const setupSpawns = (container: DependencyContainer): void => {
+    const databaseServer = container.resolve<DatabaseServer>("DatabaseServer");
+    const { locations } = databaseServer.getTables();
+    const indexedMapSpawns: Record<number, ISpawnPointParam[]> = {};
+
+    const bossZoneList = new Set([
+        "Zone_Blockpost", "Zone_RoofRocks", "Zone_RoofContainers", "Zone_RoofBeach",
+        "Zone_TreatmentRocks", "Zone_TreatmentBeach", "Zone_Hellicopter", "Zone_Island",
+        "BotZoneGate1", "BotZoneGate2", "BotZoneBasement"
+    ]);
+
+    originalMapList.forEach((map, mapIndex) => {
+        const base = locations[map].base;
+        const spawnParams = base.SpawnPointParams;
+
+        // 1. Collect open zones
+        const allZones = [...new Set(
+            spawnParams
+                .filter(({ BotZoneName }) => !!BotZoneName)
+                .map(({ BotZoneName }) => BotZoneName)
+        )];
+        base.OpenZones = allZones.join(",");
+
+        const isGZ = map.toLowerCase().includes("sandbox");
+
+        const bossSpawns: ISpawnPointParam[] = [];
+        let scavSpawns: ISpawnPointParam[] = [];
+        let sniperSpawns: ISpawnPointParam[] = [];
+        let pmcSpawns: ISpawnPointParam[] = [];
+
+        // 2. Categorize spawn points
+        shuffle(spawnParams).forEach(point => {
+            if (point.Categories.includes("Boss") || bossZoneList.has(point.BotZoneName)) {
+                bossSpawns.push(point);
+            } else if (point.BotZoneName?.toLowerCase().includes("snipe") || (map !== "lighthouse" && point.DelayToCanSpawnSec > 40)) {
+                sniperSpawns.push(point);
+            } else if (point.Infiltration || point.Categories.includes("Coop")) {
+                pmcSpawns.push(point);
+            } else {
+                scavSpawns.push(point);
+            }
+        });
+
+        // 3. GZ zone fix for sniper spawns
+        if (isGZ) {
+            sniperSpawns.forEach((point, index) => {
+                point.BotZoneName = index % 2 === 0 ? "ZoneSandSnipeCenter" : "ZoneSandSnipeCenter2";
+            });
+>>>>>>> Stashed changes
         }
       }
     );
 
+<<<<<<< Updated upstream
     // fix GZ
     if (isGZ) {
       sniperSpawns.map((point, index) => {
@@ -97,11 +163,21 @@ export const setupSpawns = (container: DependencyContainer) => {
           point.BotZoneName = ["ZoneSandSnipeCenter", "ZoneSandSnipeCenter2"][
             index
           ];
+=======
+        // 4. Cull redundant spawn points if enabled
+        if (advancedConfig.ActivateSpawnCullingOnServerStart) {
+            const zone = configLocations[mapIndex];
+            ScavSpawns[map] = removeClosestSpawnsFromCustomBots(ScavSpawns, scavSpawns, map, zone) || [];
+            PmcSpawns[map] = removeClosestSpawnsFromCustomBots(PmcSpawns, pmcSpawns, map, zone) || [];
+            PlayerSpawns[map] = removeClosestSpawnsFromCustomBots(PlayerSpawns, pmcSpawns, map, zone) || [];
+            SniperSpawns[map] = removeClosestSpawnsFromCustomBots(SniperSpawns, sniperSpawns, map, zone) || [];
+>>>>>>> Stashed changes
         }
         return point;
       });
     }
 
+<<<<<<< Updated upstream
     if (advancedConfig.ActivateSpawnCullingOnServerStart) {
       ScavSpawns[map] =
         removeClosestSpawnsFromCustomBots(
@@ -232,4 +308,66 @@ export const setupSpawns = (container: DependencyContainer) => {
     updateAllBotSpawns(SniperSpawns, "sniperSpawns");
   }
   globalValues.indexedMapSpawns = indexedMapSpawns;
+=======
+        // 5. Build + clean spawn points
+        const { spawnMinDistance: limit } = mapConfig[configLocations[mapIndex]];
+        let playerSpawns = cleanClosest(BuildCustomPlayerSpawnPoints(map, spawnParams), mapIndex, true);
+
+        scavSpawns = cleanClosest(AddCustomBotSpawnPoints(scavSpawns, map), mapIndex).map(point => ({
+            ...point,
+            BotZoneName: isGZ ? "ZoneSandbox" : point.BotZoneName,
+            Categories: ["Bot"],
+            Sides: ["Savage"],
+            CorePointId: 1,
+            ColliderParams: {
+                ...point.ColliderParams,
+                _props: {
+                    ...point.ColliderParams?._props,
+                    Radius: Math.max(point.ColliderParams?._props?.Radius ?? 0, limit)
+                }
+            }
+        }));
+
+        pmcSpawns = cleanClosest(AddCustomPmcSpawnPoints(pmcSpawns, map), mapIndex).map(point => ({
+            ...point,
+            BotZoneName: isGZ
+                ? "ZoneSandbox"
+                : getClosestZone(scavSpawns, point.Position.x, point.Position.y, point.Position.z),
+            Categories: ["Coop", Math.random() > 0.5 ? "Group" : "Opposite"],
+            Sides: ["Pmc"],
+            CorePointId: 0,
+            ColliderParams: {
+                ...point.ColliderParams,
+                _props: {
+                    ...point.ColliderParams?._props,
+                    Radius: Math.max(point.ColliderParams?._props?.Radius ?? 0, limit)
+                }
+            }
+        }));
+
+        sniperSpawns = AddCustomSniperSpawnPoints(sniperSpawns, map);
+
+        indexedMapSpawns[mapIndex] = [
+            ...sniperSpawns.map(p => ({ ...p, type: "sniper" })),
+            ...bossSpawns.map(p => ({ ...p, type: "boss" })),
+            ...scavSpawns.map(p => ({ ...p, type: "scav" })),
+            ...pmcSpawns.map(p => ({ ...p, type: "pmc" })),
+            ...playerSpawns.map(p => ({ ...p, type: "player" })),
+        ];
+
+        // 6. Finalize map spawns
+        base.SpawnPointParams = indexedMapSpawns[mapIndex];
+        base.OpenZones = [...new Set(base.SpawnPointParams.map(p => p.BotZoneName).filter(Boolean))].join(",");
+    });
+
+    // 7. Sync global values and update overlays
+    globalValues.indexedMapSpawns = indexedMapSpawns;
+
+    if (advancedConfig.ActivateSpawnCullingOnServerStart) {
+        updateAllBotSpawns(PlayerSpawns, "playerSpawns");
+        updateAllBotSpawns(PmcSpawns, "pmcSpawns");
+        updateAllBotSpawns(ScavSpawns, "scavSpawns");
+        updateAllBotSpawns(SniperSpawns, "sniperSpawns");
+    }
+>>>>>>> Stashed changes
 };

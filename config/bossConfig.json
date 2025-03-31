@@ -1,63 +1,153 @@
 {
-  "ADD_THESE_TO_A_MAP_TO_OVERRIDE_OR_ADD_A_BOSS_TO_A_MAP": {
-    "BOSS_NAME_EXAMPLE": "CHANCE_OF_SPAWNING_PERCENT",
-    "sectantPriest": 0,
-    "arenaFighterEvent": 0,
-    "bossBoarSniper": 0,
-    "pmcBot": 0,
-    "bossZryachiy": 0,
-    "exUsec": 0,
-    "crazyAssaultEvent": 0,
-    "peacemaker": 0,
-    "bossKojaniy": 0,
-    "bossGluhar": 0,
-    "bossSanitar": 0,
-    "bossKilla": 0,
-    "bossTagilla": 0,
-    "bossKnight": 0,
-    "bossBoar": 0,
-    "bossKolontay": 0,
-    "bossPartisan": 0,
-    "bossBully": 0
+  "__BossListReference__": {
+    "bossBully": {
+      "BossEnabled": false
+    },
+    "bossBoar": {
+      "BossEnabled": false
+    },
+    "bossBoarSniper": {
+      "BossEnabled": false
+    },
+    "bossGluhar": {
+      "BossEnabled": false
+    },
+    "bossKilla": {
+      "BossEnabled": false
+    },
+    "bossKnight": {
+      "BossEnabled": false
+    },
+    "bossKolontay": {
+      "BossEnabled": false
+    },
+    "bossKojaniy": {
+      "BossEnabled": false
+    },
+    "bossPartisan": {
+      "BossEnabled": false
+    },
+    "bossSanitar": {
+      "BossEnabled": false
+    },
+    "bossTagilla": {
+      "BossEnabled": false
+    },
+    "bossZryachiy": {
+      "BossEnabled": false
+    },
+    "sectantPriest": {
+      "BossEnabled": false
+    },
+    "arenaFighterEvent": {
+      "BossEnabled": false
+    },
+    "pmcBot": {
+      "BossEnabled": false
+    },
+    "crazyAssaultEvent": {
+      "BossEnabled": false
+    },
+    "peacemaker": {
+      "BossEnabled": false
+    },
+    "exUsec": {
+      "BossEnabled": false
+    }
   },
   "customs": {
-    "bossKnight": 30,
-    "bossPartisan": 30,
-    "bossBully": 30
+    "bossBully": {
+      "BossChance": 30,
+      "BossEscortAmountOverride": 2,
+      "BossEnabled": true
+    },
+    "bossKnight": {
+      "BossChance": 30,
+      "BossEnabled": true
+    },
+    "bossPartisan": {
+      "BossChance": 30,
+      "BossEnabled": true
+    }
   },
   "factoryDay": {
-    "bossTagilla": 30
+    "bossTagilla": {
+      "BossChance": 30,
+      "BossEnabled": true
+    }
   },
   "factoryNight": {
-    "bossTagilla": 30
+    "bossTagilla": {
+      "BossChance": 30,
+      "BossEnabled": true
+    }
   },
   "interchange": {
-    "bossKilla": 30
+    "bossKilla": {
+      "BossChance": 30,
+      "BossEnabled": true
+    }
   },
   "laboratory": {},
   "lighthouse": {
-    "bossKnight": 30,
-    "bossPartisan": 30
+    "bossKnight": {
+      "BossChance": 30,
+      "BossEnabled": true
+    },
+    "bossPartisan": {
+      "BossChance": 30,
+      "BossEnabled": true
+    }
   },
   "rezervbase": {
-    "bossGluhar": 30
+    "bossGluhar": {
+      "BossChance": 30,
+      "BossEnabled": true
+    }
   },
   "shoreline": {
-    "bossKnight": 30,
-    "bossPartisan": 30,
-    "bossSanitar": 30
+    "bossKnight": {
+      "BossChance": 30,
+      "BossEnabled": true
+    },
+    "bossPartisan": {
+      "BossChance": 30,
+      "BossEnabled": true
+    },
+    "bossSanitar": {
+      "BossChance": 30,
+      "BossEnabled": true
+    }
   },
   "tarkovstreets": {
-    "bossBoar": 30,
-    "bossKolontay": 30
+    "bossBoar": {
+      "BossChance": 30,
+      "BossEnabled": true
+    },
+    "bossKolontay": {
+      "BossChance": 30,
+      "BossEnabled": true
+    }
   },
   "woods": {
-    "bossKojaniy": 30,
-    "bossKnight": 30,
-    "bossPartisan": 30
+    "bossKojaniy": {
+      "BossChance": 30,
+      "BossEnabled": true
+    },
+    "bossKnight": {
+      "BossChance": 30,
+      "BossEnabled": true
+    },
+    "bossPartisan": {
+      "BossChance": 30,
+      "BossEnabled": true
+    }
   },
   "gzLow": {},
   "gzHigh": {
-    "bossKolontay": 30
+    "bossKolontay": {
+      "BossChance": 30,
+      "BossEnabled": true
+    }
   }
 }

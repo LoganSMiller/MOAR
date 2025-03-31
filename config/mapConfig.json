@@ -9,12 +9,9 @@
     "pmcWaveCount": 12,
     "scavWaveCount": 21,
     "zombieWaveCount": 9,
-    "scavHotZones": [
-      "ZoneDormitory"
-    ],
-    "pmcHotZones": [
-      "ZoneDormitory"
-    ]
+    "scavHotZones": ["ZoneDormitory"],
+    "pmcHotZones": ["ZoneDormitory"],
+    "allowPmcOnMap": true
   },
   "factoryDay": {
     "sniperQuantity": 0,
@@ -27,7 +24,8 @@
     "maxBotPerZoneOverride": 12,
     "pmcWaveCount": 8,
     "scavWaveCount": 12,
-    "zombieWaveCount": 6
+    "zombieWaveCount": 6,
+    "allowPmcOnMap": true
   },
   "factoryNight": {
     "sniperQuantity": 0,
@@ -40,7 +38,8 @@
     "maxBotPerZoneOverride": 12,
     "pmcWaveCount": 8,
     "scavWaveCount": 12,
-    "zombieWaveCount": 6
+    "zombieWaveCount": 6,
+    "allowPmcOnMap": true
   },
   "interchange": {
     "sniperQuantity": 0,
@@ -52,10 +51,8 @@
     "pmcWaveCount": 14,
     "scavWaveCount": 28,
     "zombieWaveCount": 12,
-    "scavHotZones": [
-      "ZoneCenterBot",
-      "ZoneCenter"
-    ]
+    "scavHotZones": ["ZoneCenterBot", "ZoneCenter"],
+    "allowPmcOnMap": true
   },
   "laboratory": {
     "sniperQuantity": 0,
@@ -66,7 +63,8 @@
     "spawnMinDistance": 30,
     "pmcWaveCount": 10,
     "scavWaveCount": 0,
-    "zombieWaveCount": 12
+    "zombieWaveCount": 12,
+    "allowPmcOnMap": false
   },
   "lighthouse": {
     "sniperQuantity": 3,
@@ -78,10 +76,8 @@
     "pmcWaveCount": 12,
     "scavWaveCount": 20,
     "zombieWaveCount": 10,
-    "scavHotZones": [
-      "Zone_LongRoad",
-      "Zone_LongRoad"
-    ]
+    "scavHotZones": ["Zone_LongRoad", "Zone_LongRoad"],
+    "allowPmcOnMap": true
   },
   "rezervbase": {
     "sniperQuantity": 0,
@@ -93,12 +89,9 @@
     "pmcWaveCount": 11,
     "scavWaveCount": 24,
     "zombieWaveCount": 9,
-    "scavHotZones": [
-      "ZoneRailStrorage"
-    ],
-    "pmcHotZones": [
-      "ZoneBarrack"
-    ]
+    "scavHotZones": ["ZoneRailStrorage"],
+    "pmcHotZones": ["ZoneBarrack"],
+    "allowPmcOnMap": true
   },
   "shoreline": {
     "sniperQuantity": 4,
@@ -110,12 +103,9 @@
     "pmcWaveCount": 14,
     "scavWaveCount": 28,
     "zombieWaveCount": 12,
-    "scavHotZones": [
-      "ZoneSanatorium1"
-    ],
-    "pmcHotZones": [
-      "ZoneSanatorium2"
-    ]
+    "scavHotZones": ["ZoneSanatorium1"],
+    "pmcHotZones": ["ZoneSanatorium2"],
+    "allowPmcOnMap": true
   },
   "tarkovstreets": {
     "sniperQuantity": 5,
@@ -126,7 +116,8 @@
     "spawnMinDistance": 70,
     "pmcWaveCount": 14,
     "scavWaveCount": 26,
-    "zombieWaveCount": 13
+    "zombieWaveCount": 13,
+    "allowPmcOnMap": true
   },
   "woods": {
     "sniperQuantity": 2,
@@ -138,12 +129,9 @@
     "pmcWaveCount": 14,
     "scavWaveCount": 28,
     "zombieWaveCount": 10,
-    "scavHotZones": [
-      "ZoneWoodCutter"
-    ],
-    "pmcHotZones": [
-      "ZoneWoodCutter"
-    ]
+    "scavHotZones": ["ZoneWoodCutter"],
+    "pmcHotZones": ["ZoneWoodCutter"],
+    "allowPmcOnMap": true
   },
   "gzLow": {
     "sniperQuantity": 3,
@@ -155,7 +143,8 @@
     "spawnMinDistance": 50,
     "pmcWaveCount": 10,
     "scavWaveCount": 18,
-    "zombieWaveCount": 9
+    "zombieWaveCount": 9,
+    "allowPmcOnMap": true
   },
   "gzHigh": {
     "sniperQuantity": 3,
@@ -167,6 +156,7 @@
     "spawnMinDistance": 50,
     "pmcWaveCount": 12,
     "scavWaveCount": 18,
-    "zombieWaveCount": 9
+    "zombieWaveCount": 9,
+    "allowPmcOnMap": true
   }
 }

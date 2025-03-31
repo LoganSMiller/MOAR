@@ -1,4 +1,5 @@
 import { ILocation } from "@spt/models/eft/common/ILocation";
+<<<<<<< Updated upstream
 import { configLocations } from "./constants";
 import _config from "../../config/config.json";
 import { getRandomInArray, shuffle } from "./utils";
@@ -10,8 +11,22 @@ import getSortedSpawnPointList, {
   getDistance,
   uuidv4,
 } from "./spawnZoneUtils";
+=======
+import { ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
+import { configLocations } from "./constants";
+import _config from "../../config/config.json";
+import advancedConfig from "../../config/advancedConfig.json";
+import { getRandomInArray } from "./utils";
+import { globalValues } from "../GlobalValues";
+import getSortedSpawnPointList from "./spawnZoneUtils";
+>>>>>>> Stashed changes
 
+/**
+ * Filters spawn points near the selected player spawn and updates each map’s SpawnPointParams.
+ * This is used to limit the spawn area to a small region near the player for performance and realism.
+ */
 export default function updateSpawnLocations(
+<<<<<<< Updated upstream
   locationList: ILocation[],
   config: typeof _config
 ) {
@@ -68,4 +83,44 @@ export default function updateSpawnLocations(
     //   ).length
     // );
   }
+=======
+    locationList: ILocation[],
+    config: typeof _config
+): void {
+    for (let index = 0; index < locationList.length; index++) {
+        const map = configLocations[index];
+        const mapSpawns = [...globalValues.indexedMapSpawns[index]];
+
+        const playerSpawns = mapSpawns.filter(spawn => spawn.type === "player");
+        const playerSpawn = getRandomInArray(playerSpawns);
+        globalValues.playerSpawn = playerSpawn;
+
+        const { x, y, z } = playerSpawn.Position;
+
+        // Sort all map spawns by distance from chosen player spawn
+        const sortedSpawns = getSortedSpawnPointList(mapSpawns, x, y, z);
+
+        // Limit player spawns to the nearest ones for spawn clustering
+        const maxPlayerSpawns = advancedConfig.SpawnpointAreaTarget ?? 20;
+        const clusteredPlayerSpawns: ISpawnPointParam[] = [];
+
+        for (const spawn of sortedSpawns) {
+            if (spawn.type === "player" && clusteredPlayerSpawns.length < maxPlayerSpawns) {
+                clusteredPlayerSpawns.push(spawn);
+            }
+        }
+
+        // Merge clustered player spawns with the rest of the non-player spawns
+        locationList[index].base.SpawnPointParams = [
+            ...clusteredPlayerSpawns,
+            ...sortedSpawns.filter(spawn => spawn.type !== "player")
+        ];
+
+        if (_config.debug) {
+            console.log(
+                `[MOAR] ${map} spawn area limited to ${clusteredPlayerSpawns.length} player spawns.`
+            );
+        }
+    }
+>>>>>>> Stashed changes
 }
