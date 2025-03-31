@@ -1,5 +1,4 @@
 {
-  // Preset weightings: higher numbers = more likely to be chosen randomly
   "live-like": 25,
   "more-scavs": 8,
   "more-pmcs": 8,
@@ -7,9 +6,7 @@
   "more-scavs-and-pmcs": 5,
   "main-boss-roaming": 5,
   "sniper-buddies": 4,
-
-  // 0-weight presets are excluded from random selection, but remain available for manual use
-  "boss-invasion": 0,
+  "boss-invasion": 2,
   "rogue-invasion": 0,
   "raider-invasion": 0,
   "insanity": 0
