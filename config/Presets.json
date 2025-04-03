@@ -61,16 +61,11 @@
   },
 
   "rogue-invasion": {
-<<<<<<< Updated upstream
-    "randomRaiderGroup": true,
-    "randomRaiderGroupChance": 100
-=======
     "label": "Rogue Invasion",
     "description": "Rogues may appear anywhere with high chance.",
     "enabled": true,
     "randomRogueGroup": true,
     "randomRogueGroupChance": 100
->>>>>>> Stashed changes
   },
 
   "raider-invasion": {

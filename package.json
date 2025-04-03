@@ -1,29 +1,4 @@
 {
-<<<<<<< Updated upstream
-  "name": "MOAR",
-  "version": "3.0.1-alpha-10",
-  "main": "src/mod.js",
-  "license": "MIT",
-  "author": "DewardianDev",
-  "sptVersion": "^3.10.x",
-  "scripts": {
-    "setup": "npm i",
-    "build": "node ./packageBuild.ts"
-  },
-  "devDependencies": {
-    "@semantic-release/git": "^10.0.1",
-    "@types/node": "16.18.10",
-    "@typescript-eslint/eslint-plugin": "5.46.1",
-    "@typescript-eslint/parser": "5.46.1",
-    "bestzip": "2.2.1",
-    "eslint": "8.30.0",
-    "fs-extra": "11.1.0",
-    "glob": "8.0.3",
-    "semantic-release": "^24.2.0",
-    "tsyringe": "4.7.0",
-    "typescript": "4.9.4"
-  }
-=======
     "name": "MOAR",
     "version": "3.0.2-alpha-1",
     "main": "src/mod.js",
@@ -53,5 +28,4 @@
         "typescript": "5.4",
         "winston": "3.12"
     }
->>>>>>> Stashed changes
 }

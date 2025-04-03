@@ -1,70 +1,87 @@
-// index.ts
 import playerSpawns from "../../config/Spawns/playerSpawns.json";
 import scavSpawns from "../../config/Spawns/scavSpawns.json";
 import sniperSpawns from "../../config/Spawns/sniperSpawns.json";
 import pmcSpawns from "../../config/Spawns/pmcSpawns.json";
+
 import { ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
 
-const spawnRegistry: Record<string, Record<string, ISpawnPointParam[]>> = {
+const LOG_PREFIX = "[MOAR:SpawnData]";
+
+/** Supported bot spawn types */
+export type BotSpawnType = "player" | "scav" | "sniper" | "pmc";
+
+/** Internal registry for all spawn types and their map spawn points */
+const spawnRegistry: Record<BotSpawnType, Record<string, ISpawnPointParam[]>> = {
     player: playerSpawns,
     scav: scavSpawns,
     sniper: sniperSpawns,
-    pmc: pmcSpawns,
+    pmc: pmcSpawns
 };
 
 /**
- * Retrieves spawn data for a specific bot type.
- * @param type Bot type (player, scav, sniper, pmc)
- * @returns Map-to-spawn dictionary or empty object
+ * Get spawns for a specific bot type (case-insensitive).
+ * Returns an empty object if not a recognized type.
  */
 export function getSpawnData(type: string): Record<string, ISpawnPointParam[]> {
-    const normalized = type.toLowerCase();
-    if (spawnRegistry[normalized]) {
+    const normalized = type.toLowerCase() as BotSpawnType;
+
+    if (normalized in spawnRegistry) {
         return spawnRegistry[normalized];
     }
-    console.warn(`[MOAR] Unknown spawn type requested: '${type}'`);
+
+    console.warn(`${LOG_PREFIX} Unknown spawn type requested: '${type}'`);
     return {};
 }
 
 /**
- * Merges all spawn data across types into one array.
- * Useful for visualization or proximity logic.
- * @returns All spawns merged into flat array
+ * Flatten all spawn points across all types and maps.
  */
 export function getAllSpawnData(): ISpawnPointParam[] {
     return Object.values(spawnRegistry)
-        .map((mapSpawns) => Object.values(mapSpawns).flat())
-        .flat();
+        .flatMap(typeMap => Object.values(typeMap).flat());
 }
 
 /**
- * Validates spawn data structures across all spawn types and maps.
- * @returns True if all spawn entries are valid, false otherwise.
+ * Validates presence of required fields in every spawn entry.
+ * Logs specific errors if validation fails.
  */
 export function validateSpawns(): boolean {
     let isValid = true;
-    const requiredFields = ["BotZoneName", "Position"];
+    const requiredFields: (keyof ISpawnPointParam)[] = ["BotZoneName", "Position"];
 
-    for (const [type, maps] of Object.entries(spawnRegistry)) {
+    for (const [type, maps] of Object.entries(spawnRegistry) as [BotSpawnType, Record<string, ISpawnPointParam[]>][]) {
         for (const [map, spawns] of Object.entries(maps)) {
             if (!Array.isArray(spawns)) {
-                console.error(`[MOAR] Spawn list for '${type}' on '${map}' is not an array.`);
+                console.error(`${LOG_PREFIX} Spawn list for '${type}' on '${map}' is not an array.`);
                 isValid = false;
                 continue;
             }
 
-            for (const [i, spawn] of spawns.entries()) {
+            spawns.forEach((spawn, i) => {
                 for (const field of requiredFields) {
-                    if (!(field in spawn)) {
-                        console.error(`[MOAR] Missing field '${field}' in '${type}' spawn [${map}] index ${i}`);
+                    if (spawn[field] == null) {
+                        console.error(
+                            `${LOG_PREFIX} Missing field '${String(field)}' in ${type} spawn [${map}], index ${i}`
+                        );
                         isValid = false;
                     }
                 }
-            }
+            });
         }
-    }
-
+    }             
     return isValid;
+}
+
+/**
+ * Returns a summary of total spawn counts by bot type.
+ */
+export function getSpawnSummary(): Record<BotSpawnType, number> {
+    return {
+        player: Object.values(spawnRegistry.player).flat().length,
+        scav: Object.values(spawnRegistry.scav).flat().length,
+        sniper: Object.values(spawnRegistry.sniper).flat().length,
+        pmc: Object.values(spawnRegistry.pmc).flat().length
+    };
 }
 
 export default spawnRegistry;

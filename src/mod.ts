@@ -1,96 +1,95 @@
-<<<<<<< Updated upstream
-=======
-// mod.ts
->>>>>>> Stashed changes
 import { DependencyContainer } from "tsyringe";
 import { IPostSptLoadMod } from "@spt/models/external/IPostSptLoadMod";
 import { IPostDBLoadMod } from "@spt/models/external/IPostDBLoadMod";
 import { IPreSptLoadMod } from "@spt/models/external/IPreSptLoadMod";
-<<<<<<< Updated upstream
-import { enableBotSpawning } from "../config/config.json";
-import { buildWaves } from "./Spawning/Spawning";
-import config from "../config/config.json";
-import { globalValues } from "./GlobalValues";
-import { ILogger } from "@spt/models/spt/utils/ILogger";
-import { setupRoutes } from "./Routes/routes";
-import checkPresetLogic from "./Tests/checkPresets";
-import { setupSpawns } from "./SpawnZoneChanges/setupSpawn";
-import { saveToFile } from "./utils";
-
-class Moar implements IPostSptLoadMod, IPreSptLoadMod, IPostDBLoadMod {
-  preSptLoad(container: DependencyContainer): void {
-    if (enableBotSpawning) {
-      setupRoutes(container);
-=======
 import { ILogger } from "@spt/models/spt/utils/ILogger";
 
-import { enableBotSpawning } from "../config/config.json";
-import config from "../config/config.json";
+import fs from "fs";
+import path from "path";
 
-import { globalValues } from "./GlobalValues";
+import globalValues from "./GlobalValues";
 import { setupRoutes } from "./Routes/routes";
 import { setupSpawns } from "./SpawnZoneChanges/setupSpawn";
 import { buildWaves } from "./Spawning/Spawning";
 import checkPresetLogic from "./Tests/checkPresets";
 
+// Config path constant
+const CONFIG_PATH = path.resolve(__dirname, "../config/config.json");
+
+// Defensive config loader
+function loadConfig(): Record<string, unknown> {
+    if (!fs.existsSync(CONFIG_PATH)) {
+        console.error("[MOAR]  Config file does not exist at:", CONFIG_PATH);
+        return {};
+    }
+
+    try {
+        const raw = fs.readFileSync(CONFIG_PATH, "utf-8");
+        return JSON.parse(raw);
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[MOAR]  Failed to parse config.json in mod.ts:", message);
+        return {};
+    }
+}
+
+const config = loadConfig();
+const enableBotSpawning = config["enableBotSpawning"] === true;
+
 class Moar implements IPostSptLoadMod, IPreSptLoadMod, IPostDBLoadMod {
-    /** Register HTTP routes before anything else */
     preSptLoad(container: DependencyContainer): void {
         if (enableBotSpawning) {
             setupRoutes(container);
         }
->>>>>>> Stashed changes
     }
-  }
 
-<<<<<<< Updated upstream
-  postDBLoad(container: DependencyContainer): void {
-    if (enableBotSpawning) {
-      setupSpawns(container);
-=======
-    /** Setup dynamic spawn zone changes after database loads */
     postDBLoad(container: DependencyContainer): void {
         if (enableBotSpawning) {
             setupSpawns(container);
         }
->>>>>>> Stashed changes
     }
-  }
 
-<<<<<<< Updated upstream
-  postSptLoad(container: DependencyContainer): void {
-    if (enableBotSpawning) {
-      checkPresetLogic(container);
-      globalValues.baseConfig = config;
-      globalValues.overrideConfig = {};
-      const logger = container.resolve<ILogger>("WinstonLogger");
-      logger.info(
-        "\n[MOAR]: Starting up, may the bots ever be in your favour!"
-      );
-      buildWaves(container);
-=======
-    /** Final setup phase: logic checks, wave generation, and config loading */
     postSptLoad(container: DependencyContainer): void {
         if (!enableBotSpawning) {
             return;
         }
 
-        // Load fallback config and set up global values
+        const logger = container.resolve<ILogger>("WinstonLogger");
+
         globalValues.baseConfig = config;
         globalValues.overrideConfig = {};
 
-        // Run server startup logic
-        checkPresetLogic(container);
+        try {
+            checkPresetLogic(container);
+        } catch (err) {
+            logger.warning("[MOAR]  Preset validation skipped due to format changes or load error.");
+        }
 
-        // Build all initial waves based on config
-        buildWaves(container);
+        setTimeout(() => {
+            const spawnsReady =
+                globalValues.indexedMapSpawns &&
+                Object.keys(globalValues.indexedMapSpawns).length > 0;
 
-        // Log startup success
-        const logger = container.resolve<ILogger>("WinstonLogger");
-        logger.info("\n[MOAR]: Starting up, may the bots ever be in your favour!");
->>>>>>> Stashed changes
+            if (!spawnsReady) {
+                logger.error("[MOAR]  Cannot build waves — indexedMapSpawns is not ready.");
+                return;
+            }
+
+            try {
+                buildWaves(container);
+                const presetName = globalValues.forcedPreset || "random";
+                logger.info(`[MOAR]  Waves built successfully using preset '${presetName}'.`);
+            } catch (e: unknown) {
+                const message =
+                    e && typeof e === "object" && "stack" in e
+                        ? (e as Error).stack
+                        : JSON.stringify(e, null, 2);
+                logger.error("[MOAR]  Error while building waves:\n" + message);
+            }
+        }, 100);
+
+        logger.info("[MOAR]  Startup initialized. Bot spawning is enabled.");
     }
-  }
 }
 
 module.exports = { mod: new Moar() };

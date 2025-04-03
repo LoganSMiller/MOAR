@@ -22,7 +22,10 @@ export default function checkPresetLogic(container: DependencyContainer): void {
         }
     }
 
-    // Check each preset's keys exist in config.json
+    // Fields that are allowed in presets but not expected in config
+    const ignoredKeys = ["label", "description", "enabled"];
+
+    // Check each preset's keys exist in config.json (excluding known metadata)
     for (const [presetName, presetSettings] of Object.entries(presets)) {
         if (!presetSettings || typeof presetSettings !== "object") {
             logger.error(`[MOAR]: Preset "${presetName}" is malformed.`);
@@ -30,6 +33,10 @@ export default function checkPresetLogic(container: DependencyContainer): void {
         }
 
         for (const settingKey of Object.keys(presetSettings)) {
+            if (ignoredKeys.includes(settingKey)) {
+                continue;
+            }
+
             if (!(settingKey in config)) {
                 logger.error(
                     `[MOAR]: Key "${settingKey}" in preset "${presetName}" does not exist in config.json`

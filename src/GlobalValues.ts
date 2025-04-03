@@ -1,54 +1,81 @@
-<<<<<<< Updated upstream
-import { Ixyz } from "@spt/models/eft/common/Ixyz";
-import config from "../config/config.json";
-import {
-  ILocationBase,
-  ISpawnPointParam,
-} from "@spt/models/eft/common/ILocationBase";
-
-export class globalValues {
-  public static baseConfig: typeof config = undefined;
-  public static overrideConfig: Partial<typeof config> = undefined;
-  public static locationsBase: ILocationBase[] = undefined;
-  public static currentPreset: string = "";
-  public static forcedPreset: string = "random";
-  public static addedMapZones: Record<number, string[]> = {};
-  public static indexedMapSpawns: Record<number, ISpawnPointParam[]> = {};
-  public static playerSpawn: ISpawnPointParam;
-=======
-// GlobalValues.ts
-
-import { Ixyz } from "@spt/models/eft/common/Ixyz";
-import config from "../config/config.json";
 import { ILocationBase, ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
+import fs from "fs";
+import path from "path";
 
-/**
- * Central runtime state for MOAR's spawn and config logic.
- * These values are populated during mod initialization and used across the system.
- */
-export class GlobalValues {
-    /** The default server-side config loaded from config.json */
-    public static baseConfig: typeof config;
+//  Constants
+const CONFIG_PATH = path.resolve(__dirname, "../config/config.json");
+const DEBUG = true; // Set to false to suppress logs
 
-    /** Optional override values pulled from server endpoints or presets */
-    public static overrideConfig: Partial<typeof config> = {};
+//  Type-safe FS JSON loader
+function loadJSONFile<T = unknown>(filePath: string): T | null {
+    if (!fs.existsSync(filePath)) {
+        console.warn("[MOAR]  Config file does not exist at:", filePath);
+        return null;
+    }
 
-    /** Location base data from database used for spawn logic */
-    public static locationsBase: ILocationBase[] = [];
-
-    /** The current active preset name as determined at runtime */
-    public static currentPreset: string = "";
-
-    /** A forced preset value used as fallback or override */
-    public static forcedPreset: string = "random";
-
-    /** Tracks all newly added spawn zones per map index */
-    public static addedMapZones: Record<number, string[]> = {};
-
-    /** Index of all spawn points by map ID */
-    public static indexedMapSpawns: Record<number, ISpawnPointParam[]> = {};
-
-    /** Stores the player's spawn point during runtime, used for relative zone logic */
-    public static playerSpawn: ISpawnPointParam | undefined;
->>>>>>> Stashed changes
+    try {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        return JSON.parse(raw) as T;
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[MOAR]  Failed to read JSON from", filePath, "-", message);
+        return null;
+    }
 }
+
+//  Initial config load
+const loadedConfig = loadJSONFile<Record<string, unknown>>(CONFIG_PATH) ?? {};
+if (DEBUG) {
+    console.log("[MOAR]  Loaded config.json");
+    console.log("[MOAR]  Loaded default preset:", loadedConfig["defaultPreset"]);
+}
+
+//  Global shape
+export interface GlobalValuesType {
+    baseConfig: typeof loadedConfig;
+    overrideConfig: Partial<typeof loadedConfig>;
+    locationsBase: ILocationBase[];
+    currentPreset: string;
+    forcedPreset: string;
+    addedMapZones: Record<string, string[]>;
+    indexedMapSpawns: Record<string, ISpawnPointParam[]>;
+    playerSpawn?: ISpawnPointParam;
+    initialized: boolean;
+    modVersion: string;
+    reloadConfig: () => void;
+}
+
+//  Global store
+const globalValues: GlobalValuesType = {
+    baseConfig: loadedConfig,
+    overrideConfig: {},
+    locationsBase: [],
+    currentPreset: "",
+    forcedPreset: (loadedConfig["defaultPreset"] as string) ?? "random",
+    addedMapZones: {},
+    indexedMapSpawns: {},
+    playerSpawn: undefined,
+    initialized: false,
+    modVersion: "",
+
+    reloadConfig: (): void => {
+        const newConfig = loadJSONFile<typeof loadedConfig>(CONFIG_PATH);
+        if (!newConfig) {
+            console.error("[MOAR]  Failed to reload config.json");
+            return;
+        }
+
+        globalValues.baseConfig = newConfig;
+        globalValues.forcedPreset = (newConfig["defaultPreset"] as string) ?? "random";
+
+        if (DEBUG) {
+            console.log("[MOAR]  baseConfig hot-reloaded. Forced preset set to:", globalValues.forcedPreset);
+        }
+    }
+};
+
+if (DEBUG) {
+    console.log("[MOAR]  Initial forcedPreset:", globalValues.forcedPreset);
+}
+
+export default globalValues;

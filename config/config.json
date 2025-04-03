@@ -1,8 +1,5 @@
 {
-<<<<<<< Updated upstream
-=======
   "defaultPreset": "live-like",
->>>>>>> Stashed changes
   "enableBotSpawning": true,
   "spawnSmoothing": true,
   "randomSpawns": false,
@@ -21,13 +18,9 @@
   "zombieWaveDistribution": 0.8,
 
   "pmcGroupChance": 0.2,
-<<<<<<< Updated upstream
-  
-=======
   "scavGroupChance": 0.2,
   "sniperGroupChance": 0.1,
 
->>>>>>> Stashed changes
   "pmcMaxGroupSize": 4,
   "scavMaxGroupSize": 3,
   "sniperMaxGroupSize": 1,

@@ -1,411 +1,224 @@
+// routes.ts (MOAR Server)
+import path from "path";
+import fs from "fs";
 import { DependencyContainer } from "tsyringe";
-import { buildWaves } from "../Spawning/Spawning";
 import { StaticRouterModService } from "@spt/services/mod/staticRouter/StaticRouterModService";
-<<<<<<< Updated upstream
-// import { DynamicRouterModService } from "@spt/services/mod/dynamicRouter/DynamicRouterModService";
-=======
-import { DynamicRouterModService } from "@spt/services/mod/dynamicRouter/DynamicRouterModService";
-import { CoopHandler, CoopPacketRouter } from "Fika.Core.Server";
->>>>>>> Stashed changes
-import { globalValues } from "../GlobalValues";
+import { DynamicRouterModService } from "../Services/DynamicRouterModService";
+import { buildWaves } from "../Spawning/Spawning";
+import { deleteBotSpawn, updateBotSpawn } from "../SpawnZoneChanges/updateUtils";
+import globalValues from "../GlobalValues";
 import { kebabToTitle } from "../utils";
 import PresetWeightingsConfig from "../../config/PresetWeightings.json";
-import { Ixyz } from "@spt/models/eft/common/Ixyz";
-import {
-  deleteBotSpawn,
-  updateBotSpawn,
-} from "../SpawnZoneChanges/updateUtils";
-import { PresetSyncPacket } from "../Fika/PresetSyncPacket";
+import { Ixyz } from "../Models/Ixyz";
+import { PresetSyncPacket } from "../Packets/PresetSyncPacket";
 
-export const setupRoutes = (container: DependencyContainer) => {
-  const staticRouterModService = container.resolve<StaticRouterModService>(
-    "StaticRouterModService"
-  );
-
-<<<<<<< Updated upstream
-  interface AddSpawnRequest {
+interface AddSpawnRequest {
     map: string;
     position: Ixyz;
     type: "player" | "pmc" | "scav" | "sniper";
-  }
+}
 
-  staticRouterModService.registerStaticRouter(
-    `moarAddBotSpawn`,
-    [
-      {
-        url: "/moar/addBotSpawn",
-        action: async (
-          url: string,
-          req: AddSpawnRequest,
-          sessionID,
-          output
-        ) => {
-          updateBotSpawn(req.map, req.position, req.type);
-          return "success";
-        },
-      },
-    ],
-    "moarAddBotSpawn"
-  );
+interface SetPresetRequest {
+    Preset: string;
+}
 
-  staticRouterModService.registerStaticRouter(
-    `moarDeleteBotSpawn`,
-    [
-      {
-        url: "/moar/deleteBotSpawn",
-        action: async (
-          url: string,
-          req: AddSpawnRequest,
-          sessionID,
-          output
-        ) => {
-          // console.log(req);
-          deleteBotSpawn(req.map, req.position, req.type);
-          return "success";
-        },
-      },
-    ],
-    "moarDeleteBotSpawn"
-  );
+function getSafeConfig(config: Record<string, any>): Record<string, any> {
+    const clone = { ...config };
 
-  // Make buildwaves run on game end
-  staticRouterModService.registerStaticRouter(
-    `moarUpdater`,
-    [
-      {
-        url: "/client/match/local/end",
-        action: async (_url, info, sessionId, output) => {
-          buildWaves(container);
-          return output;
-        },
-      },
-    ],
-    "moarUpdater"
-  );
-
-  staticRouterModService.registerStaticRouter(
-    `moarGetCurrentPreset`,
-    [
-      {
-        url: "/moar/currentPreset",
-        action: async () => {
-          return globalValues.forcedPreset || "random";
-        },
-      },
-    ],
-    "moarGetCurrentPreset"
-  );
-=======
-    const dynamicRouterModService = container.resolve<DynamicRouterModService>(
-        "DynamicRouterModService"
-    );
-
-    CoopHandler.Instance.Register<PresetSyncPacket>((packet) => {
-        if (!packet?.Preset) {
-            console.warn("[MOAR:FIKA] Received malformed PresetSyncPacket");
-            return;
-        }
-        globalValues.forcedPreset = packet.Preset;
-        buildWaves(container);
-    });
-
-    CoopPacketRouter.Handle("moar/syncPreset", (packet: PresetSyncPacket) => {
-        if (!packet?.Preset) {
-            console.warn("[MOAR:FIKA] Received malformed preset packet via CoopPacketRouter");
-            return;
-        }
-        globalValues.forcedPreset = packet.Preset;
-        buildWaves(container);
-    });
-
-    interface AddSpawnRequest {
-        map: string;
-        position: Ixyz;
-        type: "player" | "pmc" | "scav" | "sniper";
+    if (typeof clone.debug === "object") {
+        clone.debug = !!clone.debug.enabled;
     }
 
-    staticRouterModService.registerStaticRouter(
-        `moarAddBotSpawn`,
-        [
-            {
-                url: "/moar/addBotSpawn",
-                action: async (_url, req: AddSpawnRequest) => {
-                    updateBotSpawn(req.map, req.position, req.type);
-                    return "success";
-                },
-            },
-        ],
-        "moarAddBotSpawn"
-    );
+    return JSON.parse(JSON.stringify(clone, (key, value) => {
+        if (typeof value === "function") return undefined;
+        if (typeof value === "object" && value !== null) {
+            try {
+                JSON.stringify(value);
+            } catch {
+                return undefined;
+            }
+        }
+        return value;
+    }));
+}
 
-    staticRouterModService.registerStaticRouter(
-        `moarDeleteBotSpawn`,
-        [
-            {
-                url: "/moar/deleteBotSpawn",
-                action: async (_url, req: AddSpawnRequest) => {
-                    deleteBotSpawn(req.map, req.position, req.type);
-                    return "success";
-                },
-            },
-        ],
-        "moarDeleteBotSpawn"
-    );
+export const setupRoutes = (container: DependencyContainer): void => {
+    const staticRouter = container.resolve<StaticRouterModService>("StaticRouterModService");
+    const dynamicRouter = new DynamicRouterModService(container);
 
-    staticRouterModService.registerStaticRouter(
-        `moarUpdater`,
-        [
-            {
-                url: "/client/match/local/end",
-                action: async (_url, _info, _sessionId, output) => {
-                    buildWaves(container);
-                    return output;
-                },
-            },
-        ],
-        "moarUpdater"
-    );
+    try {
+        const fikaServerPath = path.resolve(__dirname, "../../../fika-server/package.json");
+        if (fs.existsSync(fikaServerPath)) {
+            const fika = require(fikaServerPath);
+            const fikaDllPath = path.join(process.cwd(), "BepInEx", "plugins", "Fika.Core.dll");
+            const hasClientSideFika = fs.existsSync(fikaDllPath);
 
-    staticRouterModService.registerStaticRouter(
-        `moarRaidStartUpdater`,
-        [
-            {
-                url: "/client/raid/configuration",
-                action: async (_url, _info, _sessionId, output) => {
-                    buildWaves(container);
-                    return output;
-                },
-            },
-        ],
-        "moarRaidStartUpdater"
-    );
+            console.log(hasClientSideFika
+                ? "[MOAR] FIKA client DLL detected in BepInEx/plugins"
+                : "[MOAR] FIKA client DLL not found in BepInEx/plugins");
 
-    staticRouterModService.registerStaticRouter(
-        `moarGetCurrentPreset`,
-        [
-            {
-                url: "/moar/currentPreset",
-                action: async () => {
-                    return globalValues.forcedPreset || "random";
-                },
-            },
-        ],
-        "moarGetCurrentPreset"
-    );
->>>>>>> Stashed changes
+            const CoopHandler = fika?.CoopHandler;
+            const CoopPacketRouter = fika?.CoopPacketRouter;
 
-  staticRouterModService.registerStaticRouter(
-    `moarGetAnnouncePreset`,
-    [
-      {
-        url: "/moar/announcePreset",
-        action: async () => {
-          if (globalValues.forcedPreset?.toLowerCase() === "random") {
-            return globalValues.currentPreset;
-          }
-          return globalValues.forcedPreset || globalValues.currentPreset;
-        },
-      },
-    ],
-    "moarGetAnnouncePreset"
-  );
+            CoopHandler?.Instance?.Register?.<PresetSyncPacket>((packet: PresetSyncPacket) => {
+                if (globalValues.forcedPreset === packet.PresetName) {
+                    console.log("[MOAR] FIKA preset sync skipped — already current preset:", packet.PresetName);
+                    return;
+                }
+                console.log("[MOAR] Received FIKA sync preset:", packet.PresetName);
+                globalValues.forcedPreset = packet.PresetName;
+                buildWaves(container);
+            });
 
-  staticRouterModService.registerStaticRouter(
-    `getDefaultConfig`,
-    [
-      {
+            CoopPacketRouter?.Handle?.("moar/syncPreset", (packet: PresetSyncPacket) => {
+                console.log("[MOAR] Received CoopPacketRouter preset:", packet.PresetName);
+                globalValues.forcedPreset = packet.PresetName;
+                buildWaves(container);
+            });
+
+            console.log("[MOAR] FIKA server module detected and registered");
+        } else {
+            console.warn("[MOAR] FIKA server module not found at expected path");
+        }
+    } catch (e) {
+        console.warn("[MOAR] FIKA server module failed to load. Falling back to non-Coop preset handling.");
+    }
+
+    staticRouter.registerStaticRouter("getDefaultConfig", [{
         url: "/moar/getDefaultConfig",
         action: async () => {
-          return JSON.stringify(globalValues.baseConfig);
-        },
-      },
-    ],
-    "getDefaultConfig"
-  );
+            const safe = getSafeConfig(globalValues.baseConfig);
+            return JSON.stringify(safe);
+        }
+    }], "getDefaultConfig");
 
-  staticRouterModService.registerStaticRouter(
-    `getServerConfigWithOverrides`,
-    [
-      {
+    staticRouter.registerStaticRouter("getServerConfigWithOverrides", [{
         url: "/moar/getServerConfigWithOverrides",
         action: async () => {
-          return JSON.stringify({
-            ...(globalValues.baseConfig || {}),
-            ...(globalValues.overrideConfig || {}),
-          });
-        },
-      },
-    ],
-    "getServerConfigWithOverrides"
-  );
+            const merged = {
+                ...globalValues.baseConfig,
+                ...globalValues.overrideConfig
+            };
+            const safe = getSafeConfig(merged);
+            return JSON.stringify(safe);
+        }
+    }], "getServerConfigWithOverrides");
 
-<<<<<<< Updated upstream
-  staticRouterModService.registerStaticRouter(
-    `getServerConfigWithOverrides`,
-    [
-      {
-        url: "/moar/getServerConfigWithOverrides",
+    staticRouter.registerStaticRouter("moarGetServerConfig", [{
+        url: "/moar/getServerConfig",
         action: async () => {
-          return JSON.stringify({
-            ...globalValues.baseConfig,
-            ...globalValues.overrideConfig,
-          });
-        },
-      },
-    ],
-    "getServerConfigWithOverrides"
-  );
+            const safe = getSafeConfig(globalValues.baseConfig);
+            return JSON.stringify(safe);
+        }
+    }], "moarGetServerConfig");
 
-  staticRouterModService.registerStaticRouter(
-    `moarGetPresetsList`,
-    [
-      {
+    staticRouter.registerStaticRouter("moarSetPreset", [{
+        url: "/moar/setPreset",
+        action: async (_url: string, { Preset }: SetPresetRequest) => {
+            globalValues.forcedPreset = Preset;
+            buildWaves(container);
+            return `Current Preset: ${kebabToTitle(globalValues.forcedPreset || "Random")}`;
+        }
+    }], "moarSetPreset");
+
+    staticRouter.registerStaticRouter("setOverrideConfig", [{
+        url: "/moar/setOverrideConfig",
+        action: async (_url: string, overrideConfig: Record<string, unknown>) => {
+            globalValues.overrideConfig = overrideConfig;
+            buildWaves(container);
+            return "Success";
+        }
+    }], "setOverrideConfig");
+
+    staticRouter.registerStaticRouter("moarGetPresetsList", [{
         url: "/moar/getPresets",
         action: async () => {
-          let result = [
-            ...Object.keys(PresetWeightingsConfig).map((preset) => ({
-              Name: kebabToTitle(preset),
-              Label: preset,
-            })),
-            { Name: "Random", Label: "random" },
-            { Name: "Custom", Label: "custom" },
-          ];
-
-          return JSON.stringify({ data: result });
-        },
-      },
-    ],
-    "moarGetPresetsList"
-  );
-
-  staticRouterModService.registerStaticRouter(
-    "setOverrideConfig",
-    [
-      {
-        url: "/moar/setOverrideConfig",
-        action: async (
-          url: string,
-          overrideConfig: typeof globalValues.overrideConfig = {},
-          sessionID,
-          output
-        ) => {
-          globalValues.overrideConfig = overrideConfig;
-
-          buildWaves(container);
-
-          return "Success";
-        },
-      },
-    ],
-    "setOverrideConfig"
-  );
-
-  staticRouterModService.registerStaticRouter(
-    "moarSetPreset",
-    [
-      {
-        url: "/moar/setPreset",
-        action: async (url: string, { Preset }, sessionID, output) => {
-          globalValues.forcedPreset = Preset;
-          buildWaves(container);
-
-          return `Current Preset: ${kebabToTitle(
-            globalValues.forcedPreset || "Random"
-          )}`;
-        },
-      },
-    ],
-    "moarSetPreset"
-  );
-=======
-    staticRouterModService.registerStaticRouter(
-        `moarGetDebugState`,
-        [
-            {
-                url: "/moar/debugState",
-                action: async () => {
-                    return JSON.stringify({
-                        currentPreset: globalValues.currentPreset,
-                        forcedPreset: globalValues.forcedPreset,
-                        overrideConfig: globalValues.overrideConfig,
-                        playerSpawn: globalValues.playerSpawn,
-                        indexedMapSpawnsCount: globalValues.indexedMapSpawns?.length || 0
-                    });
-                },
-            },
-        ],
-        "moarGetDebugState"
-    );
-
-    staticRouterModService.registerStaticRouter(
-        `moarGetPresetsList`,
-        [
-            {
-                url: "/moar/getPresets",
-                action: async () => {
-                    const result = [
-                        ...Object.keys(PresetWeightingsConfig).map((preset) => ({
-                            Name: kebabToTitle(preset),
-                            Label: preset,
-                        })),
-                        { Name: "Random", Label: "random" },
-                        { Name: "Custom", Label: "custom" },
-                    ];
-
-                    return JSON.stringify({ data: result });
-                },
-            },
-        ],
-        "moarGetPresetsList"
-    );
-
-    staticRouterModService.registerStaticRouter(
-        "setOverrideConfig",
-        [
-            {
-                url: "/moar/setOverrideConfig",
-                action: async (_url, overrideConfig, _sessionID) => {
-                    globalValues.overrideConfig = overrideConfig;
-                    buildWaves(container);
-                    return "Success";
-                },
-            },
-        ],
-        "setOverrideConfig"
-    );
-
-    staticRouterModService.registerStaticRouter(
-        "moarSetPreset",
-        [
-            {
-                url: "/moar/setPreset",
-                action: async (_url, { Preset }) => {
-                    globalValues.forcedPreset = Preset;
-                    buildWaves(container);
-                    return `Current Preset: ${kebabToTitle(
-                        globalValues.forcedPreset || "Random"
-                    )}`;
-                },
-            },
-        ],
-        "moarSetPreset"
-    );
-
-    dynamicRouterModService.registerDynamicRouter(
-        "moarBuildWavesDynamic",
-        {
-            routes: [
-                {
-                    route: "moar/buildWaves",
-                    action: async (_url, _info, _sessionId, output) => {
-                        buildWaves(container);
-                        return output;
-                    },
-                },
-            ],
+            const result = [
+                ...Object.keys(PresetWeightingsConfig).map(preset => ({
+                    Name: kebabToTitle(preset),
+                    Label: preset
+                })),
+                { Name: "Random", Label: "random" },
+                { Name: "Custom", Label: "custom" }
+            ];
+            return JSON.stringify({ data: result });
         }
-    );
+    }], "moarGetPresetsList");
 
-    console.log(`[MOAR] Using preset: ${globalValues.forcedPreset || globalValues.baseConfig?.defaultPreset}`);
->>>>>>> Stashed changes
+    staticRouter.registerStaticRouter("moarGetCurrentPreset", [{
+        url: "/moar/currentPreset",
+        action: async () => JSON.stringify(globalValues.forcedPreset || "random")
+    }], "moarGetCurrentPreset");
+
+    staticRouter.registerStaticRouter("moarGetAnnouncePreset", [{
+        url: "/moar/announcePreset",
+        action: async () => {
+            const forced = globalValues.forcedPreset?.toLowerCase();
+            const result = (forced === "random" || !forced)
+                ? globalValues.currentPreset
+                : globalValues.forcedPreset;
+            return JSON.stringify(result);
+        }
+    }], "moarGetAnnouncePreset");
+
+    staticRouter.registerStaticRouter("moarAddBotSpawn", [{
+        url: "/moar/addBotSpawn",
+        action: async (_url: string, req: AddSpawnRequest) => {
+            updateBotSpawn(req.map, req.position, req.type);
+            return "success";
+        }
+    }], "moarAddBotSpawn");
+
+    staticRouter.registerStaticRouter("moarDeleteBotSpawn", [{
+        url: "/moar/deleteBotSpawn",
+        action: async (_url: string, req: AddSpawnRequest) => {
+            deleteBotSpawn(req.map, req.position, req.type);
+            return "success";
+        }
+    }], "moarDeleteBotSpawn");
+
+    staticRouter.registerStaticRouter("moarReloadConfig", [{
+        url: "/moar/reloadConfig",
+        action: async () => {
+            globalValues.reloadConfig?.();
+            buildWaves(container);
+            return "Config reloaded and wave logic rebuilt.";
+        }
+    }], "moarReloadConfig");
+
+    staticRouter.registerStaticRouter("moarRaidStartUpdater", [{
+        url: "/client/raid/configuration",
+        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown) => {
+            buildWaves(container);
+            return output;
+        }
+    }], "moarRaidStartUpdater");
+
+    staticRouter.registerStaticRouter("moarUpdater", [{
+        url: "/client/match/local/end",
+        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown) => {
+            buildWaves(container);
+            return output;
+        }
+    }], "moarUpdater");
+
+    dynamicRouter.registerDynamicRouter("moarFikaSync", [{
+        route: "moar/syncPreset",
+        action: async (_url: string, info: PresetSyncPacket) => {
+            console.log("[MOAR] Dynamic route FIKA preset sync received:", info?.PresetName);
+            globalValues.forcedPreset = info?.PresetName;
+            buildWaves(container);
+            return "OK";
+        }
+    }], "moar");
+
+    dynamicRouter.registerDynamicRouter("moarBuildWavesDynamic", [{
+        route: "moar/buildWaves",
+        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown) => {
+            buildWaves(container);
+            return output;
+        }
+    }], "moar");
+
+    console.log("[MOAR] All server routes registered");
 };

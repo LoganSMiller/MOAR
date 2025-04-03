@@ -1,56 +1,204 @@
-import PresetWeightings from "../config/PresetWeightings.json";
-import Presets from "../config/Presets.json";
-import { globalValues } from "./GlobalValues";
+import { ILogger } from "@spt/models/spt/utils/ILogger";
+import { ILocation } from "@spt/models/eft/common/ILocation";
+import { IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
+import globalValues from "./GlobalValues";
 
-export const saveToFile = (data, filePath) => {
-  var fs = require("fs");
-  let dir = __dirname;
-  let dirArray = dir.split("\\");
-  const directory = `${dirArray[dirArray.length - 4]}/${dirArray[dirArray.length - 3]
-    }/${dirArray[dirArray.length - 2]}/`;
-  fs.writeFile(
-    directory + filePath,
-    JSON.stringify(data, null, 4),
-    function (err) {
-      if (err) throw err;
+import fs from "fs";
+import path from "path";
+import { MOARConfig, MapSettings } from "./types";
+
+// Paths to configs
+const configPath = path.resolve(__dirname, "../config/config.json");
+const mapConfigPath = path.resolve(__dirname, "../config/mapConfig.json");
+
+// Safe JSON loading
+function loadJSON<T = Record<string, unknown>>(filePath: string, label: string): T {
+    if (!fs.existsSync(filePath)) {
+        console.error(`[MOAR]  ${label} file not found at: ${filePath}`);
+        return {} as T;
     }
-  );
-};
 
-export const cloneDeep = (objectToClone: any) =>
-  JSON.parse(JSON.stringify(objectToClone));
-
-export const getRandomPresetOrCurrentlySelectedPreset = () => {
-  switch (true) {
-    case globalValues.forcedPreset.toLowerCase() === "custom":
-      return {};
-    case !globalValues.forcedPreset:
-      globalValues.forcedPreset = "random";
-      break;
-    case globalValues.forcedPreset === "random":
-      break;
-
-    default:
-      return Presets[globalValues.forcedPreset];
-  }
-
-  const all = [];
-
-  const itemKeys = Object.keys(PresetWeightings);
-
-  for (const key of itemKeys) {
-    for (let i = 0; i < PresetWeightings[key]; i++) {
-      all.push(key);
+    try {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        return JSON.parse(raw);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[MOAR]  Failed to parse ${label}:`, message);
+        return {} as T;
     }
-  }
+}
 
-  const preset: string = all[Math.round(Math.random() * (all.length - 1))];
-  globalValues.currentPreset = preset;
-  return Presets[preset];
-};
+// Fully typed configs
+const config: MOARConfig = loadJSON<MOARConfig>(configPath, "config.json");
+const mapConfig: Record<string, MapSettings> = loadJSON<Record<string, MapSettings>>(mapConfigPath, "mapConfig.json");
 
-export const kebabToTitle = (str: string): string =>
-  str
-    .split("-")
-    .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
-    .join(" ");
+/**
+ * Converts a kebab-case string to Title Case.
+ */
+export function kebabToTitle(text: string): string {
+    return text.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+/**
+ * Deep clone for simple serializable objects.
+ */
+export function cloneDeep<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value));
+}
+
+/**
+ * Fisher-Yates shuffle.
+ */
+export function shuffle<T>(array: T[]): T[] {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+/**
+ * Partial shuffle with limited swaps.
+ */
+export function looselyShuffle<T>(array: T[], swaps = 3): T[] {
+    const arr = [...array];
+    for (let i = 0; i < swaps; i++) {
+        const a = Math.floor(Math.random() * arr.length);
+        const b = Math.floor(Math.random() * arr.length);
+        [arr[a], arr[b]] = [arr[b], arr[a]];
+    }
+    return arr;
+}
+
+/**
+ * Picks a random element from an array.
+ */
+export function getRandomInArray<T>(arr: T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/**
+ * Returns the active or fallback config.
+ */
+export function getRandomPresetOrCurrentlySelectedPreset(): MOARConfig {
+    return config;
+}
+
+/**
+ * Saves any object to disk as a JSON debug file.
+ */
+export function saveToFile(filename: string, value: unknown): void {
+    try {
+        const modDirectory = path.resolve(__dirname, "../../../");
+        const debugDir = path.join(modDirectory, "debug");
+        const fullPath = path.join(debugDir, `debug_${filename}.json`);
+
+        if (!fs.existsSync(debugDir)) {
+            fs.mkdirSync(debugDir, { recursive: true });
+        }
+
+        const safeString = JSON.stringify(
+            value,
+            (key, val) => {
+                if (typeof val === "function") return "[Function]";
+                if (typeof val === "bigint") return val.toString();
+                return val;
+            },
+            2
+        );
+
+        fs.writeFileSync(fullPath, safeString);
+    } catch (err) {
+        console.warn(`[MOAR]  Failed to stringify or save debug file: ${filename}`, err);
+    }
+}
+
+/**
+ * Applies spawn smoothing to all wave times in all maps.
+ */
+export function enforceSmoothing(
+    locationList: ILocation[],
+    config: MOARConfig,
+    logger: ILogger
+): void {
+    if (!config.spawnSmoothing) return;
+
+    for (const location of locationList) {
+        const waves = location.base?.BossLocationSpawn;
+        if (!waves?.length) continue;
+
+        for (const wave of waves) {
+            if (typeof wave.Time === "number" && Number.isFinite(wave.Time)) {
+                wave.Time = Math.round(wave.Time * config.smoothingDistribution);
+            } else {
+                wave.Time = 0;
+            }
+        }
+
+        if (config.debug?.enabled) {
+            logger.info(`[MOAR]  Smoothed waves on ${location.base?.Id}.`);
+        }
+    }
+}
+
+/**
+ * Sets EscapeTimeLimit for each map using map overrides.
+ */
+export function setEscapeTimeOverrides(
+    locations: ILocation[],
+    mapOverrides: Record<string, MapSettings>,
+    logger: ILogger,
+    activeConfig: MOARConfig
+): void {
+    const fallbackTime = 45;
+
+    for (const loc of locations) {
+        const mapId = loc.base.Id;
+        const mapSettings = mapOverrides[mapId];
+        const overrideTime = mapSettings?.escapeTimeOverride;
+
+        if (typeof overrideTime === "number") {
+            loc.base.EscapeTimeLimit = overrideTime;
+        } else {
+            loc.base.EscapeTimeLimit = fallbackTime;
+            logger.warning(`[MOAR]  No escapeTimeOverride for ${mapId}, using fallback ${fallbackTime} minutes.`);
+        }
+
+        if (activeConfig.debug?.enabled) {
+            logger.info(`[MOAR]  ${mapId} escape time set to ${loc.base.EscapeTimeLimit} min`);
+        }
+    }
+}
+
+/**
+ * Validates whether maps and spawn data are ready to be used for spawning.
+ */
+export function validateWaveBuildSanity(
+    locations: ILocation[],
+    logger: ILogger
+): boolean {
+    if (!globalValues.indexedMapSpawns || Object.keys(globalValues.indexedMapSpawns).length === 0) {
+        logger.error("[MOAR]  indexedMapSpawns is missing or empty.");
+        return false;
+    }
+
+    if (!globalValues.playerSpawn || !globalValues.playerSpawn.Position) {
+        logger.error("[MOAR]  globalValues.playerSpawn is not set.");
+        return false;
+    }
+
+    for (const loc of locations) {
+        if (!loc?.base) {
+            logger.error("[MOAR]  One of the locations is missing its .base property.");
+            return false;
+        }
+
+        if (typeof loc.base.EscapeTimeLimit !== "number") {
+            logger.error(`[MOAR]  ${loc.base.Id} is missing a valid EscapeTimeLimit.`);
+            return false;
+        }
+    }
+
+    return true;
+}

@@ -1,198 +1,34 @@
-<<<<<<< Updated upstream
-import { IBotConfig } from "@spt/models/spt/config/IBotConfig.d";
-import { IPmcConfig } from "@spt/models/spt/config/IPmcConfig.d";
-=======
 import { IBotConfig } from "@spt/models/spt/config/IBotConfig";
 import { IPmcConfig } from "@spt/models/spt/config/IPmcConfig";
->>>>>>> Stashed changes
 import { DatabaseServer } from "@spt/servers/DatabaseServer";
-import _config from "../../config/config.json";
-import _mapConfig from "../../config/mapConfig.json";
 import { ConfigServer } from "@spt/servers/ConfigServer";
 import { ConfigTypes } from "@spt/models/enums/ConfigTypes";
 import { DependencyContainer } from "tsyringe";
-import { globalValues } from "../GlobalValues";
-import {
-  cloneDeep,
-  getRandomPresetOrCurrentlySelectedPreset,
-  saveToFile,
-} from "../utils";
-<<<<<<< Updated upstream
-import { ILocationConfig } from "@spt/models/spt/config/ILocationConfig.d";
-=======
 import { ILocationConfig } from "@spt/models/spt/config/ILocationConfig";
->>>>>>> Stashed changes
-import { originalMapList } from "./constants";
-import { buildBossWaves } from "./buildBossWaves";
-import buildZombieWaves from "./buildZombieWaves";
-import buildScavMarksmanWaves from "./buildScavMarksmanWaves";
-import buildPmcs from "./buildPmcs";
-import { enforceSmoothing, setEscapeTimeOverrides } from "./utils";
 import { ILogger } from "@spt/models/spt/utils/ILogger";
-import updateSpawnLocations from "./updateSpawnLocations";
-import marksmanChanges from "./marksmanChanges";
+
+import globalValues from "../GlobalValues";
+import mapConfig from "../../config/mapConfig.json";
 import advancedConfig from "../../config/advancedConfig.json";
 
-<<<<<<< Updated upstream
-export const buildWaves = (container: DependencyContainer) => {
-  const configServer = container.resolve<ConfigServer>("ConfigServer");
-  const Logger = container.resolve<ILogger>("WinstonLogger");
-  const pmcConfig = configServer.getConfig<IPmcConfig>(ConfigTypes.PMC);
-  const botConfig = configServer.getConfig<IBotConfig>(ConfigTypes.BOT);
+import {
+    cloneDeep,
+    getRandomPresetOrCurrentlySelectedPreset,
+    saveToFile,
+    enforceSmoothing,
+    setEscapeTimeOverrides,
+    validateWaveBuildSanity
+} from "../utils";
 
-  const locationConfig = configServer.getConfig<ILocationConfig>(
-    ConfigTypes.LOCATION
-  );
+import { originalMapList } from "./constants";
+import { buildBossWaves } from "./buildBossWaves";
+import { buildZombieWaves } from "./buildZombieWaves";
+import buildScavMarksmanWaves from "./buildScavMarksmanWaves";
+import buildPmcs from "./buildPmcs";
+import updateSpawnLocations from "./updateSpawnLocations";
+import marksmanChanges from "./marksmanChanges";
+import type { MOARConfig, MOARPresetConfig } from "../types";
 
-  locationConfig.rogueLighthouseSpawnTimeSettings.waitTimeSeconds = 60;
-  locationConfig.enableBotTypeLimits = false;
-  locationConfig.fitLootIntoContainerAttempts = 1; // Move to ALP
-  locationConfig.addCustomBotWavesToMaps = false;
-  locationConfig.customWaves = { boss: {}, normal: {} };
-
-  const databaseServer = container.resolve<DatabaseServer>("DatabaseServer");
-
-  const { locations, bots } = databaseServer.getTables();
-
-  let config = cloneDeep(globalValues.baseConfig) as typeof _config;
-
-  const preset = getRandomPresetOrCurrentlySelectedPreset();
-
-  Object.keys(globalValues.overrideConfig).forEach((key) => {
-    if (config[key] !== globalValues.overrideConfig[key]) {
-      config.debug &&
-        console.log(
-          `[MOAR] overrideConfig ${key} changed from ${config[key]} to ${globalValues.overrideConfig[key]}`
-        );
-      config[key] = globalValues.overrideConfig[key];
-    }
-  });
-
-  // Set from preset if preset above is not empty
-  Object.keys(preset).forEach((key) => {
-    if (config[key] !== preset[key]) {
-      config.debug &&
-        console.log(
-          `[MOAR]  preset ${globalValues.currentPreset}:  ${key} changed from ${config[key]} to ${preset[key]}`
-        );
-      config[key] = preset[key];
-    }
-  });
-
-  // config.debug &&
-  console.log(
-    globalValues.forcedPreset === "custom"
-      ? "custom"
-      : globalValues.forcedPreset
-      ? globalValues.forcedPreset
-      : globalValues.currentPreset
-  );
-
-  const {
-    bigmap: customs,
-    factory4_day: factoryDay,
-    factory4_night: factoryNight,
-    interchange,
-    laboratory,
-    lighthouse,
-    rezervbase,
-    shoreline,
-    tarkovstreets,
-    woods,
-    sandbox: gzLow,
-    sandbox_high: gzHigh,
-  } = locations;
-
-  let locationList = [
-    customs,
-    factoryDay,
-    factoryNight,
-    interchange,
-    laboratory,
-    lighthouse,
-    rezervbase,
-    shoreline,
-    tarkovstreets,
-    woods,
-    gzLow,
-    gzHigh,
-  ];
-
-  // This resets all locations to original state
-  if (!globalValues.locationsBase) {
-    globalValues.locationsBase = locationList.map(({ base }) =>
-      cloneDeep(base)
-    );
-  } else {
-    locationList = locationList.map((item, key) => ({
-      ...item,
-      base: cloneDeep(globalValues.locationsBase[key]),
-    }));
-  }
-
-  pmcConfig.convertIntoPmcChance = {
-    default: {
-      assault: { min: 0, max: 0 },
-      cursedassault: { min: 0, max: 0 },
-      pmcbot: { min: 0, max: 0 },
-      exusec: { min: 0, max: 0 },
-      arenafighter: { min: 0, max: 0 },
-      arenafighterevent: { min: 0, max: 0 },
-      crazyassaultevent: { min: 0, max: 0 },
-    },
-    factory4_day: { assault: { min: 0, max: 0 } },
-    laboratory: { pmcbot: { min: 0, max: 0 } },
-    rezervbase: { pmcbot: { min: 0, max: 0 } },
-  };
-
-  if (config.startingPmcs && (!config.randomSpawns || config.spawnSmoothing)) {
-    Logger.warning(
-      `[MOAR] Starting pmcs turned on, turning off cascade system and smoothing.\n`
-    );
-    config.spawnSmoothing = false;
-    config.randomSpawns = true;
-  }
-
-  if (advancedConfig.MarksmanDifficultyChanges) {
-    marksmanChanges(bots);
-  }
-
-  updateSpawnLocations(locationList, config);
-
-  setEscapeTimeOverrides(locationList, _mapConfig, Logger, config);
-
-  // BOSS RELATED STUFF!
-  buildBossWaves(config, locationList);
-
-  //Zombies
-  if (config.zombiesEnabled) {
-    buildZombieWaves(config, locationList, bots);
-  }
-
-  buildPmcs(config, locationList);
-
-  // Make main waves
-  buildScavMarksmanWaves(config, locationList, botConfig);
-
-  // enableSmoothing
-  if (config.spawnSmoothing) {
-    enforceSmoothing(locationList);
-  }
-
-  // saveToFile(locations.bigmap.base.SpawnPointParams, "spawns.json");
-
-  originalMapList.forEach((name, index) => {
-    if (!locations[name]) {
-      console.log("[MOAR] OH CRAP we have a problem!", name);
-    } else {
-      locations[name] = locationList[index];
-    }
-  });
-=======
-/**
- * Entry point for applying all custom bot wave generation logic.
- * Merges settings, resets maps, applies preset, builds PMCs, Scavs, Snipers, Zombies, and Boss waves.
- */
 export const buildWaves = (container: DependencyContainer): void => {
     const configServer = container.resolve<ConfigServer>("ConfigServer");
     const logger = container.resolve<ILogger>("WinstonLogger");
@@ -201,7 +37,6 @@ export const buildWaves = (container: DependencyContainer): void => {
     const botConfig = configServer.getConfig<IBotConfig>(ConfigTypes.BOT);
     const locationConfig = configServer.getConfig<ILocationConfig>(ConfigTypes.LOCATION);
 
-    // Basic location config tuning
     locationConfig.rogueLighthouseSpawnTimeSettings.waitTimeSeconds = 60;
     locationConfig.enableBotTypeLimits = false;
     locationConfig.fitLootIntoContainerAttempts = 1;
@@ -211,66 +46,79 @@ export const buildWaves = (container: DependencyContainer): void => {
     const databaseServer = container.resolve<DatabaseServer>("DatabaseServer");
     const { locations, bots } = databaseServer.getTables();
 
-    // Clone base config and override with runtime values
-    const config = cloneDeep(globalValues.baseConfig) as typeof _config;
-    const preset = getRandomPresetOrCurrentlySelectedPreset();
+    if (!globalValues.baseConfig) {
+        logger.error("[MOAR] globalValues.baseConfig is undefined.");
+        return;
+    }
 
-    // Override config keys
-    for (const key of Object.keys(globalValues.overrideConfig)) {
-        const override = globalValues.overrideConfig[key];
-        if (config[key] !== override) {
-            if (config.debug) {
-                console.log(`[MOAR] overrideConfig ${key} changed from ${config[key]} to ${override}`);
+    const config = cloneDeep(globalValues.baseConfig) as unknown as MOARConfig;
+    const preset = cloneDeep(getRandomPresetOrCurrentlySelectedPreset()) as Partial<MOARPresetConfig>;
+
+    globalValues.indexedMapSpawns ??= {};
+
+    // Apply override config
+    for (const [key, override] of Object.entries(globalValues.overrideConfig)) {
+        if (key in config && config[key as keyof MOARConfig] !== override) {
+            if (config.debug?.enabled) {
+                console.log(`[MOAR] overrideConfig ${key} changed from ${config[key as keyof MOARConfig]} to ${override}`);
             }
-            config[key] = override;
+            (config as any)[key] = override;
         }
     }
 
-    // Apply preset if different from config
-    for (const key of Object.keys(preset)) {
-        if (config[key] !== preset[key]) {
-            if (config.debug) {
-                console.log(`[MOAR] preset ${globalValues.currentPreset}: ${key} changed from ${config[key]} to ${preset[key]}`);
+    // Apply preset
+    for (const [key, value] of Object.entries(preset)) {
+        if (["label", "description", "enabled"].includes(key)) continue;
+        if (config[key as keyof MOARConfig] !== value) {
+            if (config.debug?.enabled) {
+                console.log(`[MOAR] preset ${globalValues.currentPreset}: ${key} changed from ${config[key as keyof MOARConfig]} to ${value}`);
             }
-            config[key] = preset[key];
+            (config as any)[key] = value;
         }
     }
+
+    // Ensure config.debug shape is complete
+    config.debug = {
+        enabled: config.debug?.enabled ?? false,
+        logSpawnData: config.debug?.logSpawnData ?? false,
+        logBossOverrides: config.debug?.logBossOverrides ?? false
+    };
 
     console.log(`[MOAR] Using preset: ${globalValues.forcedPreset || globalValues.currentPreset}`);
 
-    // Get live location references
-    const {
-        bigmap: customs,
-        factory4_day: factoryDay,
-        factory4_night: factoryNight,
-        interchange,
-        laboratory,
-        lighthouse,
-        rezervbase,
-        shoreline,
-        tarkovstreets,
-        woods,
-        sandbox: gzLow,
-        sandbox_high: gzHigh
-    } = locations;
-
-    let locationList = [
-        customs, factoryDay, factoryNight, interchange, laboratory,
-        lighthouse, rezervbase, shoreline, tarkovstreets, woods,
-        gzLow, gzHigh
+    const locationList = [
+        locations.bigmap,
+        locations.factory4_day,
+        locations.factory4_night,
+        locations.interchange,
+        locations.laboratory,
+        locations.lighthouse,
+        locations.rezervbase,
+        locations.shoreline,
+        locations.tarkovstreets,
+        locations.woods,
+        locations.sandbox,
+        locations.sandbox_high
     ];
 
-    // Reset or restore from global cache
-    if (!globalValues.locationsBase) {
+    if (!globalValues.locationsBase.length) {
         globalValues.locationsBase = locationList.map(loc => cloneDeep(loc.base));
     } else {
-        locationList = locationList.map((loc, i) => ({
-            ...loc,
-            base: cloneDeep(globalValues.locationsBase[i])
-        }));
+        for (let i = 0; i < locationList.length; i++) {
+            locationList[i].base = cloneDeep(globalValues.locationsBase[i]);
+        }
     }
 
-    // Disable PMC conversion for bots
+    for (const loc of locationList) {
+        const mapId = loc.base?.Id;
+        if (mapId && !globalValues.indexedMapSpawns[mapId]) {
+            globalValues.indexedMapSpawns[mapId] = loc.base.SpawnPointParams.map((p: any) => ({
+                ...p,
+                type: p.type || "scav"
+            }));
+        }
+    }
+
     pmcConfig.convertIntoPmcChance = {
         default: {
             assault: { min: 0, max: 0 },
@@ -286,7 +134,6 @@ export const buildWaves = (container: DependencyContainer): void => {
         rezervbase: { pmcbot: { min: 0, max: 0 } }
     };
 
-    // Safety catch: If using starting PMCs, turn off smoothing cascade
     if (config.startingPmcs && (!config.randomSpawns || config.spawnSmoothing)) {
         logger.warning("[MOAR] Starting PMCs enabled. Disabling spawn smoothing/cascade fallback.");
         config.spawnSmoothing = false;
@@ -297,36 +144,58 @@ export const buildWaves = (container: DependencyContainer): void => {
         marksmanChanges(bots);
     }
 
-    // Update static spawn point modifiers before wave generation
     updateSpawnLocations(locationList, config);
+    setEscapeTimeOverrides(locationList, mapConfig, logger, config);
 
-    // Sync escape time overrides
-    setEscapeTimeOverrides(locationList, _mapConfig, logger, config);
+    if (!validateWaveBuildSanity(locationList, logger)) {
+        logger.error("[MOAR] Sanity validation failed. Wave build aborted.");
+        return;
+    }
 
-    // Start applying wave systems
     buildBossWaves(config, locationList);
 
     if (config.zombiesEnabled) {
         buildZombieWaves(config, locationList, bots);
     }
 
-    buildPmcs(config, locationList);
-    buildScavMarksmanWaves(config, locationList, botConfig);
-
-    if (config.spawnSmoothing) {
-        enforceSmoothing(locationList);
+    if (config.scavMarksmenEnabled) {
+        buildScavMarksmanWaves(config, locationList);
     }
 
-    // Inject final data back into locations table
-    originalMapList.forEach((name, index) => {
-        if (!locations[name]) {
-            console.log(`[MOAR] OH CRAP: Missing location reference ${name}`);
-        } else {
-            locations[name] = locationList[index];
-        }
-    });
+    if (config.pmcWavesEnabled) {
+        buildPmcs(config, locationList);
+    }
 
-    // Uncomment for debugging spawn state:
-    // saveToFile(locations.bigmap.base.SpawnPointParams, "spawns.json");
->>>>>>> Stashed changes
+    enforceSmoothing(locationList, config, logger);
+
+    for (const loc of locationList) {
+        const seen = new Set<string>();
+        loc.base.BossLocationSpawn = (loc.base.BossLocationSpawn ?? []).filter((boss: any) => {
+            if (typeof boss.Time !== "number" || isNaN(boss.Time)) {
+                boss.Time = 0;
+                if (config.debug?.logSpawnData) {
+                    console.warn(`[MOAR] Boss spawn on ${loc.base.Id} had invalid Time. Auto-fixed to 0.`);
+                }
+            }
+
+            const key = `${boss.BossName}-${boss.BossZone}-${boss.Time}`;
+            if (seen.has(key)) {
+                if (config.debug?.logSpawnData) {
+                    console.warn(`[MOAR] Duplicate boss wave skipped: ${key}`);
+                }
+                return false;
+            }
+
+            seen.add(key);
+            return true;
+        });
+    }
+
+    saveToFile("spawned", locationList.map(loc => ({
+        map: loc.base.Id,
+        spawns: loc.base.SpawnPointParams?.length ?? 0,
+        bosses: loc.base.BossLocationSpawn?.length ?? 0,
+        escapeTime: loc.base.EscapeTimeLimit,
+        botCap: loc.base.BotMax ?? null
+    })));
 };
