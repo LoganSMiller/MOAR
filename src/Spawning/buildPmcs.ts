@@ -55,10 +55,19 @@ export default function buildPmcs(
 
         const { x, y, z } = globalValues.playerSpawn?.Position ?? { x: 0, y: 0, z: 0 };
 
-        let pmcZones = getSortedSpawnPointList(
-            locationList[index].base.SpawnPointParams.filter((p: ISpawnPointParam) => p.type === "pmc"),
-            x, y, z
-        ).map((p: ISpawnPointParam) => p.BotZoneName);
+        let pmcZones: string[] = [];
+
+if (globalValues.coopSpawnZone) {
+    pmcZones = new Array(10).fill(globalValues.coopSpawnZone);
+    if (config.debug?.enabled) {
+        console.log(`[MOAR] [PMC] Forcing Coop group to zone: ${globalValues.coopSpawnZone}`);
+    }
+} else {
+    pmcZones = getSortedSpawnPointList(
+        locationList[index].base.SpawnPointParams.filter((p: ISpawnPointParam) => p.type === "pmc"),
+        x, y, z
+    ).map((p: ISpawnPointParam) => p.BotZoneName);
+}
 
         looselyShuffle(pmcZones, 3);
 
