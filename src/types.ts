@@ -2,51 +2,47 @@
  * Core MOAR config structure, representing values from config.json.
  */
 export interface MOARConfig {
-    // Preset selection and toggles
+    // === Preset toggles ===
     defaultPreset: string;
     enableBotSpawning: boolean;
     spawnSmoothing: boolean;
     randomSpawns: boolean;
     startingPmcs: boolean;
-    // Controls the distribution of spawn smoothing, affecting how evenly spawns are distributed over time.
-    smoothingDistribution: number;
-    // The minimum distance from the player at which bots can spawn.
-    spawnMinDistance: number;
-    // Maximum distance at which entities can spawn from the player.
-    spawnMaxDistance: number; 
-    
- 
 
-    // Difficulty tuning
+    // === Spawn control ===
+    smoothingDistribution: number;
+    spawnMinDistance: number;
+    spawnMaxDistance: number;
+    spawnRadius: number;         // Default spawn sphere radius (optional override)
+    spawnDelay: number;          // Delay before spawns activate (seconds)
+
+    // === Difficulty tuning ===
     pmcDifficulty: number;
     scavDifficulty: number;
     zombieHealth: number;
 
-    // Wave quantity controls
+    // === Wave quantity and distribution ===
     pmcWaveQuantity: number;
     scavWaveQuantity: number;
     zombieWaveQuantity: number;
-
-    // Wave distribution methods (e.g., even/random)
     pmcWaveDistribution: number;
     scavWaveDistribution: number;
     zombieWaveDistribution: number;
 
-    // Grouping probabilities
+    // === Grouping logic ===
     pmcGroupChance: number;
     scavGroupChance: number;
     sniperGroupChance: number;
 
-    // Group size maximums
     pmcMaxGroupSize: number;
     scavMaxGroupSize: number;
     sniperMaxGroupSize: number;
 
-    // Bot caps
+    // === Bot caps ===
     maxBotCap: number;
     maxBotPerZone: number;
 
-    // Boss logic
+    // === Boss spawning logic ===
     bossOpenZones: boolean;
     disableBosses: boolean;
     mainBossChanceBuff: number;
@@ -55,21 +51,21 @@ export interface MOARConfig {
     gradualBossInvasion: boolean;
     enableBossOverrides: boolean;
 
-    // Raider/Rogue random groups
+    // === Raiders and Rogues ===
     randomRaiderGroup: boolean;
     randomRaiderGroupChance: number;
     randomRogueGroup: boolean;
     randomRogueGroupChance: number;
 
-    // Zombies and spawn restrictions
+    // === Zombie and restriction toggles ===
     zombiesEnabled: boolean;
     forceHotzonesOnly: boolean;
 
-    // Optional system toggles
+    // === Optional systems ===
     scavMarksmenEnabled?: boolean;
     pmcWavesEnabled?: boolean;
 
-    // Debug toggles
+    // === Debug options ===
     debug: {
         enabled: boolean;
         logSpawnData: boolean;
@@ -138,7 +134,9 @@ export interface MapSettings {
     allowPmcOnMap?: boolean;
 }
 
-// Configuration for overriding boss performance settings, such as spawn chances, escort details, and triggers.
+/**
+ * Configuration for boss performance overrides.
+ */
 export interface BossPerformanceOverride {
     BossChance?: number;
     BossEscortAmount?: string;

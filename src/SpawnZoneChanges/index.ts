@@ -37,8 +37,11 @@ export function getSpawnData(type: string): Record<string, ISpawnPointParam[]> {
  * Flatten all spawn points across all types and maps.
  */
 export function getAllSpawnData(): ISpawnPointParam[] {
-    return Object.values(spawnRegistry)
-        .flatMap(typeMap => Object.values(typeMap).flat());
+    return Object.values(spawnRegistry).flatMap(typeMap => {
+        return Object.values(typeMap).flat().filter(spawn => {
+            return spawn?.BotZoneName && spawn?.Position;
+        });
+    });
 }
 
 /**
@@ -68,7 +71,8 @@ export function validateSpawns(): boolean {
                 }
             });
         }
-    }             
+    }
+
     return isValid;
 }
 

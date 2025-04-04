@@ -1,51 +1,38 @@
 import fs from "fs";
 import path from "path";
-import { Ixyz } from "@spt/models/eft/common/Ixyz";
-import  Distance  from "../Spawning/spawnZoneUtils";
+import { Ixyz } from "../Models/Ixyz";
 
 const SPAWN_DIR = path.resolve(__dirname, "../../config/Spawns");
 const LOG_PREFIX = "[MOAR:SpawnUtils]";
 const DELETE_DISTANCE_THRESHOLD = 15;
+const DEBUG = false; // Set to true for debugging logs
 
 export type BotSpawnType = "player" | "pmc" | "scav" | "sniper";
 
 /**
- * Generic JSON file updater using a transformation callback.
+ * Type-safe JSON file update utility.
  */
 export const updateJsonFile = <T>(
     filePath: string,
     callback: (jsonData: T) => void,
     successMessage: string
 ): void => {
-    fs.readFile(filePath, "utf8", (err, data) => {
-        if (err) {
-            console.error(`${LOG_PREFIX} Failed to read ${filePath}:`, err);
-            return;
-        }
-
-        let jsonData: T;
-        try {
-            jsonData = JSON.parse(data);
-        } catch (parseErr) {
-            console.error(`${LOG_PREFIX} JSON parse error in ${filePath}:`, parseErr);
-            return;
-        }
+    try {
+        const raw = fs.readFileSync(filePath, "utf8");
+        const jsonData = JSON.parse(raw) as T;
 
         callback(jsonData);
 
-        fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), "utf8", (writeErr) => {
-            if (writeErr) {
-                console.error(`${LOG_PREFIX} Failed to write ${filePath}:`, writeErr);
-                return;
-            }
-
-            console.log(`${LOG_PREFIX} ${successMessage}`);
-        });
-    });
+        fs.writeFileSync(filePath, JSON.stringify(jsonData, null, 2), "utf8");
+        console.log(`${LOG_PREFIX} ${successMessage}`);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`${LOG_PREFIX} Failed to update ${filePath}:`, message);
+    }
 };
 
 /**
- * Appends a new bot spawn point to the correct file.
+ * Append a spawn to the correct file for the given type and map.
  */
 export const updateBotSpawn = (
     map: string,
@@ -56,14 +43,14 @@ export const updateBotSpawn = (
     const key = map.toLowerCase();
 
     updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
-        value.y += 0.5; // Offset to avoid floor clipping
-        jsonData[key] = jsonData[key] ?? [];
+        value.y += 0.5; // Offset Y to prevent ground clipping
+        jsonData[key] ??= [];
         jsonData[key].push(value);
     }, `Added ${type} spawn to '${map}'`);
 };
 
 /**
- * Removes the closest spawn to the given coordinate from the file.
+ * Delete the closest spawn to a given point within a distance threshold.
  */
 export const deleteBotSpawn = (
     map: string,
@@ -84,11 +71,11 @@ export const deleteBotSpawn = (
         let nearestIndex = -1;
         let shortest = Infinity;
 
-        spawns.forEach(({ x, y, z }, index) => {
+        spawns.forEach(({ x, y, z }, i) => {
             const dist = Math.sqrt((x - X) ** 2 + (y - Y) ** 2 + (z - Z) ** 2);
             if (dist < shortest) {
                 shortest = dist;
-                nearestIndex = index;
+                nearestIndex = i;
             }
         });
 
@@ -96,13 +83,27 @@ export const deleteBotSpawn = (
             spawns.splice(nearestIndex, 1);
             console.log(`${LOG_PREFIX} Deleted ${type} spawn from '${map}' ~${shortest.toFixed(2)}m away`);
         } else {
-            console.warn(`${LOG_PREFIX} No nearby ${type} spawn found within ${DELETE_DISTANCE_THRESHOLD}m on '${map}'. Closest: ${shortest.toFixed(2)}m`);
+            console.warn(`${LOG_PREFIX} No nearby ${type} spawn within ${DELETE_DISTANCE_THRESHOLD}m on '${map}'. Closest was ${shortest.toFixed(2)}m`);
         }
     }, `Removed ${type} spawn from '${map}'`);
 };
 
 /**
- * Replaces all spawn data for a type across all maps.
+ * Deduplicates spawn entries by approximate position hash.
+ */
+function dedupeIxyzArray(points: Ixyz[]): Ixyz[] {
+    const seen = new Set<string>();
+    return points.filter(p => {
+        const key = `${p.x.toFixed(3)}:${p.y.toFixed(3)}:${p.z.toFixed(3)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+/**
+ * Replaces all spawn data for a type across all maps, safely deduplicating input.
+ * Should only be used before the raid starts (never during active play).
  */
 export const updateAllBotSpawns = (
     values: Record<string, Ixyz[]>,
@@ -112,8 +113,14 @@ export const updateAllBotSpawns = (
     const filePath = path.join(SPAWN_DIR, `${safeType}Spawns.json`);
 
     updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
-        for (const map of Object.keys(values)) {
-            jsonData[map] = values[map];
+        for (const [map, rawPoints] of Object.entries(values)) {
+            const deduped = dedupeIxyzArray(rawPoints);
+            jsonData[map] = deduped;
+
+            if (DEBUG) {
+                console.log(`${LOG_PREFIX} [${map}] ${targetType} spawns updated (${deduped.length} points)`);
+            }
         }
-    }, `Overwrote all ${safeType} spawns`);
+    }, `Overwrote all ${safeType} spawns (deduplicated)`);
 };
+

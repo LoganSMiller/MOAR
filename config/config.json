@@ -25,6 +25,9 @@
   "scavMaxGroupSize": 3,
   "sniperMaxGroupSize": 1,
 
+  "spawnRadius": 20,
+  "spawnDelay": 4,
+
   "maxBotCap": 20,
   "maxBotPerZone": 6,
 

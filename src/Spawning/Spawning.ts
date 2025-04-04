@@ -29,6 +29,18 @@ import updateSpawnLocations from "./updateSpawnLocations";
 import marksmanChanges from "./marksmanChanges";
 import type { MOARConfig, MOARPresetConfig } from "../types";
 
+/** Type guard to verify object is a valid MOARConfig */
+function isMOARConfig(obj: unknown): obj is MOARConfig {
+    return typeof obj === "object" &&
+        obj !== null &&
+        "defaultPreset" in obj &&
+        "enableBotSpawning" in obj &&
+        "spawnSmoothing" in obj &&
+        "randomSpawns" in obj &&
+        "maxBotCap" in obj &&
+        "debug" in obj;
+}
+
 export const buildWaves = (container: DependencyContainer): void => {
     const configServer = container.resolve<ConfigServer>("ConfigServer");
     const logger = container.resolve<ILogger>("WinstonLogger");
@@ -37,6 +49,7 @@ export const buildWaves = (container: DependencyContainer): void => {
     const botConfig = configServer.getConfig<IBotConfig>(ConfigTypes.BOT);
     const locationConfig = configServer.getConfig<ILocationConfig>(ConfigTypes.LOCATION);
 
+    // Base location tuning
     locationConfig.rogueLighthouseSpawnTimeSettings.waitTimeSeconds = 60;
     locationConfig.enableBotTypeLimits = false;
     locationConfig.fitLootIntoContainerAttempts = 1;
@@ -51,33 +64,36 @@ export const buildWaves = (container: DependencyContainer): void => {
         return;
     }
 
-    const config = cloneDeep(globalValues.baseConfig) as unknown as MOARConfig;
+    const rawConfig = cloneDeep(globalValues.baseConfig);
+    if (!isMOARConfig(rawConfig)) {
+        logger.error("[MOAR] Invalid structure in baseConfig. Aborting wave build.");
+        return;
+    }
+
+    const config = rawConfig;
     const preset = cloneDeep(getRandomPresetOrCurrentlySelectedPreset()) as Partial<MOARPresetConfig>;
 
-    globalValues.indexedMapSpawns ??= {};
-
-    // Apply override config
+    // Merge overrideConfig into base config
     for (const [key, override] of Object.entries(globalValues.overrideConfig)) {
         if (key in config && config[key as keyof MOARConfig] !== override) {
             if (config.debug?.enabled) {
-                console.log(`[MOAR] overrideConfig ${key} changed from ${config[key as keyof MOARConfig]} to ${override}`);
+                console.log(`[MOAR] overrideConfig: ${key} = ${override}`);
             }
             (config as any)[key] = override;
         }
     }
 
-    // Apply preset
+    // Merge preset into config
     for (const [key, value] of Object.entries(preset)) {
         if (["label", "description", "enabled"].includes(key)) continue;
         if (config[key as keyof MOARConfig] !== value) {
             if (config.debug?.enabled) {
-                console.log(`[MOAR] preset ${globalValues.currentPreset}: ${key} changed from ${config[key as keyof MOARConfig]} to ${value}`);
+                console.log(`[MOAR] preset override: ${key} = ${value}`);
             }
             (config as any)[key] = value;
         }
     }
 
-    // Ensure config.debug shape is complete
     config.debug = {
         enabled: config.debug?.enabled ?? false,
         logSpawnData: config.debug?.logSpawnData ?? false,
@@ -101,6 +117,7 @@ export const buildWaves = (container: DependencyContainer): void => {
         locations.sandbox_high
     ];
 
+    // Cache original spawn data per map
     if (!globalValues.locationsBase.length) {
         globalValues.locationsBase = locationList.map(loc => cloneDeep(loc.base));
     } else {
@@ -119,6 +136,7 @@ export const buildWaves = (container: DependencyContainer): void => {
         }
     }
 
+    // Disable PMC conversion to ensure clean faction spawning
     pmcConfig.convertIntoPmcChance = {
         default: {
             assault: { min: 0, max: 0 },
@@ -134,21 +152,24 @@ export const buildWaves = (container: DependencyContainer): void => {
         rezervbase: { pmcbot: { min: 0, max: 0 } }
     };
 
+    // Adjust behavior if Starting PMCs is on
     if (config.startingPmcs && (!config.randomSpawns || config.spawnSmoothing)) {
-        logger.warning("[MOAR] Starting PMCs enabled. Disabling spawn smoothing/cascade fallback.");
+        logger.warning("[MOAR] Starting PMCs enabled. Forcing randomSpawns = true, spawnSmoothing = false.");
         config.spawnSmoothing = false;
         config.randomSpawns = true;
     }
 
+    // Difficulty tweaks
     if (advancedConfig.MarksmanDifficultyChanges) {
         marksmanChanges(bots);
     }
 
+    // === Main spawn logic ===
     updateSpawnLocations(locationList, config);
     setEscapeTimeOverrides(locationList, mapConfig, logger, config);
 
     if (!validateWaveBuildSanity(locationList, logger)) {
-        logger.error("[MOAR] Sanity validation failed. Wave build aborted.");
+        logger.error("[MOAR] Sanity validation failed. Aborting wave build.");
         return;
     }
 
@@ -168,6 +189,7 @@ export const buildWaves = (container: DependencyContainer): void => {
 
     enforceSmoothing(locationList, config, logger);
 
+    // Final boss cleanup pass (de-duplication)
     for (const loc of locationList) {
         const seen = new Set<string>();
         loc.base.BossLocationSpawn = (loc.base.BossLocationSpawn ?? []).filter((boss: any) => {
@@ -191,6 +213,7 @@ export const buildWaves = (container: DependencyContainer): void => {
         });
     }
 
+    // Final report
     saveToFile("spawned", locationList.map(loc => ({
         map: loc.base.Id,
         spawns: loc.base.SpawnPointParams?.length ?? 0,

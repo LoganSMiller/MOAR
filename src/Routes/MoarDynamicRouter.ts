@@ -60,18 +60,18 @@ export class MoarDynamicRouter implements IDynamicRouterMod {
         sessionID: string,
         output: string
     ): Promise<string> {
-        const route = this.getHandledRoutes().find(r => url.includes(r));
-        const action = route ? this.routeIndex.get(route) : null;
+        const routeKey = this.getHandledRoutes().find(r => url.includes(r));
+        const routeHandler = routeKey ? this.routeIndex.get(routeKey) : null;
 
-        if (!action) {
+        if (!routeHandler || typeof routeHandler.action !== "function") {
             console.warn(`[MOAR]  No matching route handler for: ${url}`);
             return output;
         }
 
         try {
-            return await action.action(url, info, sessionID, output);
+            return await routeHandler.action(url, info, sessionID, output);
         } catch (err) {
-            console.error(`[MOAR]  Error executing handler for /${route}:`, err);
+            console.error(`[MOAR]  Error executing handler for /${routeKey}:`, err);
             return output;
         }
     }

@@ -22,11 +22,12 @@ export default function buildScavMarksmanWaves(
         const map = mapSettingsList[index];
         const mapSettings: MapSettings = mapConfig[map];
 
+        // Ensure we have spawn data for this map
         globalValues.indexedMapSpawns ??= {};
         if (!globalValues.indexedMapSpawns[map]) {
             globalValues.indexedMapSpawns[map] = [];
             if (config.debug?.enabled) {
-                console.warn(`[MOAR] Indexed spawns missing for ${map}, initialized.`);
+                console.warn(`[MOAR] Indexed spawns missing for ${map}, initialized empty.`);
             }
         }
 
@@ -41,15 +42,16 @@ export default function buildScavMarksmanWaves(
 
         const { x, y, z } = globalValues.playerSpawn?.Position ?? { x: 0, y: 0, z: 0 };
 
+        // Fetch valid scav/sniper zone names
         let scavZones = getSortedSpawnPointList(
             locationList[index].base.SpawnPointParams.filter((p: ISpawnPointParam) => p.type === "scav"),
             x, y, z
-        ).map((p: ISpawnPointParam) => p.BotZoneName);
+        ).map((p: ISpawnPointParam) => p.BotZoneName || "zone_scav_fallback");
 
         let sniperZones = getSortedSpawnPointList(
             locationList[index].base.SpawnPointParams.filter((p: ISpawnPointParam) => p.type === "sniper"),
             x, y, z
-        ).map((p: ISpawnPointParam) => p.BotZoneName);
+        ).map((p: ISpawnPointParam) => p.BotZoneName || "zone_sniper_fallback");
 
         looselyShuffle(scavZones, 3);
         looselyShuffle(sniperZones, 2);
@@ -61,13 +63,12 @@ export default function buildScavMarksmanWaves(
         );
 
         let totalScavWaves = Math.round(scavWaveCount * config.scavWaveQuantity * escapeRatio);
-
         if (scavHotZones.length && totalScavWaves > 0) {
             totalScavWaves += scavHotZones.length;
         }
 
         while (totalScavWaves > scavZones.length) {
-            scavZones = scavZones.length === 0 ? [""] : [...scavZones, ...scavZones];
+            scavZones = scavZones.length === 0 ? ["zone_scav_fallback"] : [...scavZones, ...scavZones];
         }
 
         const timeLimit = (typeof escapeLimit === "number" && !isNaN(escapeLimit) ? escapeLimit : baseEscapeTime) * 60;
@@ -102,6 +103,7 @@ export default function buildScavMarksmanWaves(
 
         const allScavs: IBossLocationSpawn[] = [...scavWaves, ...sniperWaves];
 
+        // Randomly assign hot zones to some waves
         if (allScavs.length && scavHotZones.length) {
             for (const zone of scavHotZones) {
                 const targetIndex = Math.floor(Math.random() * allScavs.length);
@@ -111,6 +113,7 @@ export default function buildScavMarksmanWaves(
             }
         }
 
+        // Merge into boss spawn list while deduplicating
         const seen = new Set<string>();
         const existing = locationList[index].base.BossLocationSpawn ?? [];
 

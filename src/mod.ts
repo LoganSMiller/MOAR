@@ -12,29 +12,101 @@ import { setupRoutes } from "./Routes/routes";
 import { setupSpawns } from "./SpawnZoneChanges/setupSpawn";
 import { buildWaves } from "./Spawning/Spawning";
 import checkPresetLogic from "./Tests/checkPresets";
+import { MOARConfig } from "./types";
 
-// Config path constant
 const CONFIG_PATH = path.resolve(__dirname, "../config/config.json");
 
-// Defensive config loader
-function loadConfig(): Record<string, unknown> {
+/**
+ * Load and parse config.json, falling back to safe defaults on failure.
+ */
+function loadConfig(): MOARConfig {
     if (!fs.existsSync(CONFIG_PATH)) {
         console.error("[MOAR]  Config file does not exist at:", CONFIG_PATH);
-        return {};
+        return getDefaultConfig();
     }
 
     try {
         const raw = fs.readFileSync(CONFIG_PATH, "utf-8");
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+
+        return {
+            ...getDefaultConfig(),
+            ...parsed
+        };
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         console.error("[MOAR]  Failed to parse config.json in mod.ts:", message);
-        return {};
+        return getDefaultConfig();
     }
 }
 
+/**
+ * Fallback MOAR config used when loading fails.
+ */
+function getDefaultConfig(): MOARConfig {
+    return {
+        defaultPreset: "random",
+        enableBotSpawning: false,
+        spawnSmoothing: false,
+        randomSpawns: false,
+        startingPmcs: false,
+        smoothingDistribution: 1,
+        spawnMinDistance: 50,
+        spawnMaxDistance: 250,
+        spawnRadius: 150,
+        spawnDelay: 15,
+
+        pmcDifficulty: 1,
+        scavDifficulty: 1,
+        zombieHealth: 100,
+
+        pmcWaveQuantity: 1,
+        scavWaveQuantity: 1,
+        zombieWaveQuantity: 1,
+
+        pmcWaveDistribution: 0,
+        scavWaveDistribution: 0,
+        zombieWaveDistribution: 0,
+
+        pmcGroupChance: 0,
+        scavGroupChance: 0,
+        sniperGroupChance: 0,
+
+        pmcMaxGroupSize: 1,
+        scavMaxGroupSize: 1,
+        sniperMaxGroupSize: 1,
+
+        maxBotCap: 10,
+        maxBotPerZone: 2,
+
+        bossOpenZones: false,
+        disableBosses: false,
+        mainBossChanceBuff: 0,
+        bossInvasion: false,
+        bossInvasionSpawnChance: 0,
+        gradualBossInvasion: false,
+        enableBossOverrides: false,
+
+        randomRaiderGroup: false,
+        randomRaiderGroupChance: 0,
+        randomRogueGroup: false,
+        randomRogueGroupChance: 0,
+
+        zombiesEnabled: false,
+        forceHotzonesOnly: false,
+        scavMarksmenEnabled: false,
+        pmcWavesEnabled: true,
+
+        debug: {
+            enabled: false,
+            logSpawnData: false,
+            logBossOverrides: false
+        }
+    };
+}
+
 const config = loadConfig();
-const enableBotSpawning = config["enableBotSpawning"] === true;
+const enableBotSpawning = config.enableBotSpawning;
 
 class Moar implements IPostSptLoadMod, IPreSptLoadMod, IPostDBLoadMod {
     preSptLoad(container: DependencyContainer): void {

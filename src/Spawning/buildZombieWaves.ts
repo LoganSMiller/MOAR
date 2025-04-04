@@ -24,13 +24,15 @@ export function buildZombieWaves(
 
     const zombieBodyParts = getHealthBodyPartsByPercentage(zombieHealth);
 
-    // Patch health of all zombie types
+    //  Patch zombie health templates safely
     for (const type of zombieTypes) {
-        const healthTemplate = bots.types?.[type]?.health;
-        if (!healthTemplate?.BodyParts) continue;
+        const template = bots.types?.[type];
+        const health = template?.health?.BodyParts;
 
-        for (let i = 0; i < healthTemplate.BodyParts.length; i++) {
-            healthTemplate.BodyParts[i] = zombieBodyParts;
+        if (!health || !Array.isArray(health)) continue;
+
+        for (let i = 0; i < health.length; i++) {
+            health[i] = zombieBodyParts;
         }
 
         if (debug?.enabled) {
@@ -45,33 +47,31 @@ export function buildZombieWaves(
         const mapId = configLocations[index] as keyof typeof mapConfig;
         const mapSetting: MapSettings = mapConfig[mapId];
 
-        if (!mapSetting?.zombieWaveCount) {
+        if (!mapSetting?.zombieWaveCount || mapSetting.zombieWaveCount <= 0) {
             if (debug?.enabled) {
-                console.warn(`[MOAR] [ZOMBIE] Skipping ${mapId} — no zombieWaveCount in map config.`);
+                console.warn(`[MOAR] [ZOMBIE] Skipping ${mapId} — no valid zombieWaveCount in map config.`);
             }
             continue;
         }
 
         const rawEscape = location.EscapeTimeLimit;
-        const escapeTime = typeof rawEscape === "number" && !isNaN(rawEscape)
-            ? rawEscape
-            : defaultEscapeTimes[mapId] ?? 45;
-
-        const escapeRatio = Math.round(escapeTime / (defaultEscapeTimes[mapId] ?? 45));
+        const baseEscape = defaultEscapeTimes[mapId] ?? 45;
+        const escapeTime = (typeof rawEscape === "number" && !isNaN(rawEscape)) ? rawEscape : baseEscape;
+        const escapeRatio = Math.round(escapeTime / baseEscape);
         const totalWaves = Math.round(mapSetting.zombieWaveCount * zombieWaveQuantity * escapeRatio);
 
         if (debug?.enabled && escapeRatio !== 1) {
             console.log(`[MOAR] [ZOMBIE] ${mapId} wave scaling: ${mapSetting.zombieWaveCount} × ${zombieWaveQuantity} × ${escapeRatio} = ${totalWaves}`);
         }
 
-        const timeLimit = Number.isFinite(escapeTime) ? escapeTime * 60 : 2700;
+        const timeLimit = escapeTime * 60;
         const distribution = zombieWaveDistribution === 1 ? "random" : "even";
 
         const zombieWaves = buildZombie(
             totalWaves,
             timeLimit,
             distribution,
-            9999
+            9999 // Use high bot cap to prevent issues on high-density maps
         );
 
         if (debug?.enabled) {
@@ -81,6 +81,7 @@ export function buildZombieWaves(
         const existing = location.BossLocationSpawn ?? [];
         const seen = new Set<string>();
 
+        //  Merge and deduplicate by BossName-Zone-Time
         location.BossLocationSpawn = [...existing, ...zombieWaves].filter(wave => {
             wave.Time = typeof wave.Time === "number" && !isNaN(wave.Time) ? wave.Time : 0;
             const key = `${wave.BossName}-${wave.BossZone}-${wave.Time}`;

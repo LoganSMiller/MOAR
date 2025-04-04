@@ -5,45 +5,51 @@ import presets from "../../config/Presets.json";
 import presetWeightings from "../../config/PresetWeightings.json";
 
 /**
- * Checks the integrity of PresetWeightings.json and Presets.json
- * against config.json, logging issues to the server console.
+ * Validates consistency between preset files:
+ * - Ensures every preset in PresetWeightings.json exists in Presets.json
+ * - Ensures every preset key is valid against config.json
+ *
+ * Logs validation issues to the server logger.
  */
 export default function checkPresetLogic(container: DependencyContainer): void {
     const logger = container.resolve<ILogger>("WinstonLogger");
 
-    logger.info(`[MOAR]: Validating preset config integrity...`);
+    logger.info("[MOAR]: 🔍 Validating preset config integrity...");
 
-    // Check for missing presets referenced in weighting file
+    // Preset metadata keys allowed to exist in presets but not in base config
+    const allowedPresetMetadata = new Set(["label", "description", "enabled"]);
+
+    // Track if any issues were found
+    let hasIssues = false;
+
+    //  1. Check: All presets in PresetWeightings exist in Presets.json
     for (const presetName of Object.keys(presetWeightings)) {
         if (!(presetName in presets)) {
-            logger.error(
-                `[MOAR]: Missing preset "${presetName}" in Presets.json (referenced in PresetWeightings.json)`
-            );
+            logger.error(`[MOAR]: ❌ Preset "${presetName}" missing in Presets.json (referenced in PresetWeightings.json)`);
+            hasIssues = true;
         }
     }
 
-    // Fields that are allowed in presets but not expected in config
-    const ignoredKeys = ["label", "description", "enabled"];
-
-    // Check each preset's keys exist in config.json (excluding known metadata)
-    for (const [presetName, presetSettings] of Object.entries(presets)) {
-        if (!presetSettings || typeof presetSettings !== "object") {
-            logger.error(`[MOAR]: Preset "${presetName}" is malformed.`);
+    //  2. Check: All keys inside each preset are valid config fields (or metadata)
+    for (const [presetName, presetData] of Object.entries(presets)) {
+        if (!presetData || typeof presetData !== "object") {
+            logger.error(`[MOAR]: ❌ Preset "${presetName}" is malformed or not an object.`);
+            hasIssues = true;
             continue;
         }
 
-        for (const settingKey of Object.keys(presetSettings)) {
-            if (ignoredKeys.includes(settingKey)) {
-                continue;
-            }
-
-            if (!(settingKey in config)) {
-                logger.error(
-                    `[MOAR]: Key "${settingKey}" in preset "${presetName}" does not exist in config.json`
-                );
+        for (const key of Object.keys(presetData)) {
+            if (allowedPresetMetadata.has(key)) continue;
+            if (!(key in config)) {
+                logger.error(`[MOAR]: ❌ Invalid key "${key}" in preset "${presetName}" (not found in config.json)`);
+                hasIssues = true;
             }
         }
     }
 
-    logger.info(`[MOAR]: Preset validation complete.`);
+    if (!hasIssues) {
+        logger.info("[MOAR]: ✅ Preset validation passed with no errors.");
+    } else {
+        logger.warn("[MOAR]: ⚠️ Preset validation completed with issues. Check log above.");
+    }
 }

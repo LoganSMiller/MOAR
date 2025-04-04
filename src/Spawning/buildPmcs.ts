@@ -55,19 +55,20 @@ export default function buildPmcs(
 
         const { x, y, z } = globalValues.playerSpawn?.Position ?? { x: 0, y: 0, z: 0 };
 
+        // Zone collection
         let pmcZones: string[] = [];
 
-if (globalValues.coopSpawnZone) {
-    pmcZones = new Array(10).fill(globalValues.coopSpawnZone);
-    if (config.debug?.enabled) {
-        console.log(`[MOAR] [PMC] Forcing Coop group to zone: ${globalValues.coopSpawnZone}`);
-    }
-} else {
-    pmcZones = getSortedSpawnPointList(
-        locationList[index].base.SpawnPointParams.filter((p: ISpawnPointParam) => p.type === "pmc"),
-        x, y, z
-    ).map((p: ISpawnPointParam) => p.BotZoneName);
-}
+        if (globalValues.coopSpawnZone) {
+            pmcZones = new Array(10).fill(globalValues.coopSpawnZone);
+            if (config.debug?.enabled) {
+                console.log(`[MOAR] [PMC] Forcing Coop group to zone: ${globalValues.coopSpawnZone}`);
+            }
+        } else {
+            pmcZones = getSortedSpawnPointList(
+                locationList[index].base.SpawnPointParams.filter((p: ISpawnPointParam) => p.type === "pmc"),
+                x, y, z
+            ).map((p: ISpawnPointParam) => p.BotZoneName || "fallback_zone");
+        }
 
         looselyShuffle(pmcZones, 3);
 
@@ -88,8 +89,9 @@ if (globalValues.coopSpawnZone) {
             totalWaves += pmcHotZones.length;
         }
 
+        // Duplicate zones to meet wave demand
         while (totalWaves > pmcZones.length) {
-            pmcZones = pmcZones.length === 0 ? [""] : [...pmcZones, ...pmcZones];
+            pmcZones = pmcZones.length === 0 ? ["fallback_zone"] : [...pmcZones, ...pmcZones];
         }
 
         if (config.debug?.enabled) {
@@ -98,7 +100,6 @@ if (globalValues.coopSpawnZone) {
 
         const rawTimeLimit = escapeLimit * 60;
         const timeLimit = Number.isFinite(rawTimeLimit) ? rawTimeLimit : 1800;
-
         const half = Math.ceil(totalWaves / 2);
         const waveDistribution = config.pmcWaveDistribution === 1 ? "random" : "even";
 
@@ -136,6 +137,7 @@ if (globalValues.coopSpawnZone) {
 
         const allPmcs: IBossLocationSpawn[] = [...usecWaves, ...bearWaves];
 
+        // Apply hotzones to existing waves
         if (allPmcs.length && pmcHotZones.length) {
             for (const zone of pmcHotZones) {
                 const targetIndex = Math.floor(Math.random() * allPmcs.length);
@@ -145,8 +147,12 @@ if (globalValues.coopSpawnZone) {
             }
         }
 
+        // Final safety/consistency pass
         for (const wave of allPmcs) {
             wave.Time = typeof wave.Time === "number" && !isNaN(wave.Time) ? wave.Time : 0;
+            wave.BossChance = Math.max(1, Math.min(100, wave.BossChance || 100));
         }
+
+        locationList[index].base.BossLocationSpawn.push(...allPmcs);
     }
 }

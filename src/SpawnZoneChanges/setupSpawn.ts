@@ -24,32 +24,36 @@ import {
 import { updateAllBotSpawns } from "./updateUtils";
 import { shuffle } from "../utils";
 
-// Cast JSON imports to strongly typed spawn maps
+// Cast JSON into typed Ixyz[] format
 const PlayerSpawns = Object.fromEntries(
     Object.entries(PlayerSpawnsRaw).map(([key, points]) => [
         key,
-        points.map(point => new Ixyz(point.x, point.y, point.z))
-    ])
-) as Record<string, Ixyz[]>;
-const PmcSpawns = Object.fromEntries(
-    Object.entries(PmcSpawnsRaw).map(([key, points]) => [
-        key,
-        (points as { x: number; y: number; z: number }[]).map(point => new Ixyz(point.x, point.y, point.z))
-    ])
-) as Record<string, Ixyz[]>;
-const ScavSpawns = Object.fromEntries(
-    Object.entries(ScavSpawnsRaw).map(([key, points]) => [
-        key,
-        points.map(point => new Ixyz(point.x, point.y, point.z))
-    ])
-) as Record<string, Ixyz[]>;
-const SniperSpawns = Object.fromEntries(
-    Object.entries(SniperSpawnsRaw).map(([key, points]) => [
-        key,
-        points.map(point => new Ixyz(point.x, point.y, point.z))
+        (points as { x: number; y: number; z: number }[]).map(p => new Ixyz(p.x, p.y, p.z))
     ])
 ) as Record<string, Ixyz[]>;
 
+const PmcSpawns = Object.fromEntries(
+    Object.entries(PmcSpawnsRaw).map(([key, points]) => [
+        key,
+        (points as { x: number; y: number; z: number }[]).map(p => new Ixyz(p.x, p.y, p.z))
+    ])
+) as Record<string, Ixyz[]>;
+
+const ScavSpawns = Object.fromEntries(
+    Object.entries(ScavSpawnsRaw).map(([key, points]) => [
+        key,
+        (points as { x: number; y: number; z: number }[]).map(p => new Ixyz(p.x, p.y, p.z))
+    ])
+) as Record<string, Ixyz[]>;
+
+const SniperSpawns = Object.fromEntries(
+    Object.entries(SniperSpawnsRaw).map(([key, points]) => [
+        key,
+        (points as { x: number; y: number; z: number }[]).map(p => new Ixyz(p.x, p.y, p.z))
+    ])
+) as Record<string, Ixyz[]>;
+
+// Set of known boss zones
 const bossZoneList = new Set([
     "Zone_Blockpost", "Zone_RoofRocks", "Zone_RoofContainers", "Zone_RoofBeach",
     "Zone_TreatmentRocks", "Zone_TreatmentBeach", "Zone_Hellicopter", "Zone_Island",
@@ -76,11 +80,13 @@ export const setupSpawns = (container: DependencyContainer): void => {
     globalValues.indexedMapSpawns ??= {};
     const indexedMapSpawns: Record<string, ISpawnPointParam[]> = {};
 
-    originalMapList.forEach((map, mapIndex) => {
+    for (let mapIndex = 0; mapIndex < originalMapList.length; mapIndex++) {
+        const map = originalMapList[mapIndex];
         const base = locations[map]?.base;
+
         if (!base) {
-            console.warn(`[MOAR] Skipped missing or invalid map: ${map}`);
-            return;
+            console.warn(`[MOAR] Skipping missing map: ${map}`);
+            continue;
         }
 
         if (!base.SpawnPointParams) {
@@ -90,11 +96,6 @@ export const setupSpawns = (container: DependencyContainer): void => {
         const spawnParams = base.SpawnPointParams;
         const isGZ = map.toLowerCase().includes("sandbox");
         const configKey = configLocations[mapIndex] as keyof typeof mapConfig;
-
-        if (!mapConfig[configKey]) {
-            console.warn(`[MOAR] No mapConfig found for ${map} (key: ${configKey})`);
-        }
-
         const radiusLimit = mapConfig[configKey]?.spawnMinDistance ?? 20;
 
         const bossSpawns: ISpawnPointParam[] = [];
@@ -102,6 +103,7 @@ export const setupSpawns = (container: DependencyContainer): void => {
         let sniperSpawns: ISpawnPointParam[] = [];
         let pmcSpawns: ISpawnPointParam[] = [];
 
+        // Classify vanilla spawns by intent
         shuffle(spawnParams).forEach((point: ISpawnPointParam) => {
             if (point.Categories?.includes("Boss") || bossZoneList.has(point.BotZoneName)) {
                 bossSpawns.push(point);
@@ -117,26 +119,28 @@ export const setupSpawns = (container: DependencyContainer): void => {
             }
         });
 
+        // Adjust sandbox sniper zones
         if (isGZ) {
             sniperSpawns.forEach((point, i) => {
                 point.BotZoneName = i % 2 === 0 ? "ZoneSandSnipeCenter" : "ZoneSandSnipeCenter2";
             });
         }
 
+        // Cull overly close custom spawn points to prevent clustering
         if (advancedConfig.ActivateSpawnCullingOnServerStart) {
-            const zoneKey = configKey;
-            ScavSpawns[map] = removeClosestSpawnsFromCustomBots(ScavSpawns, scavSpawns, map, zoneKey);
-            PmcSpawns[map] = removeClosestSpawnsFromCustomBots(PmcSpawns, pmcSpawns, map, zoneKey);
-            PlayerSpawns[map] = removeClosestSpawnsFromCustomBots(PlayerSpawns, pmcSpawns, map, zoneKey);
-            SniperSpawns[map] = removeClosestSpawnsFromCustomBots(SniperSpawns, sniperSpawns, map, zoneKey);
+            ScavSpawns[map] = removeClosestSpawnsFromCustomBots(ScavSpawns, scavSpawns, map, configKey);
+            PmcSpawns[map] = removeClosestSpawnsFromCustomBots(PmcSpawns, pmcSpawns, map, configKey);
+            PlayerSpawns[map] = removeClosestSpawnsFromCustomBots(PlayerSpawns, pmcSpawns, map, configKey);
+            SniperSpawns[map] = removeClosestSpawnsFromCustomBots(SniperSpawns, sniperSpawns, map, configKey);
         }
 
-        const playerSpawns = cleanClosest(
+        const playerSpawns: ISpawnPointParam[] = cleanClosest(
             spawnParams.filter((p: ISpawnPointParam) => p.Categories?.includes("Player") && p.Infiltration),
             mapIndex,
             true
         );
 
+        // Scav inject + cleanup
         scavSpawns = cleanClosest(AddCustomBotSpawnPoints(scavSpawns, map), mapIndex).map((point) =>
             applyColliderRadiusClamp({
                 ...point,
@@ -147,6 +151,7 @@ export const setupSpawns = (container: DependencyContainer): void => {
             }, radiusLimit)
         );
 
+        // PMC inject + cleanup
         pmcSpawns = cleanClosest(AddCustomPmcSpawnPoints(pmcSpawns, map), mapIndex).map((point) =>
             applyColliderRadiusClamp({
                 ...point,
@@ -159,6 +164,7 @@ export const setupSpawns = (container: DependencyContainer): void => {
             }, radiusLimit)
         );
 
+        // Snipers (no cleaning needed)
         sniperSpawns = AddCustomSniperSpawnPoints(sniperSpawns, map);
 
         const allSpawns = [
@@ -175,7 +181,7 @@ export const setupSpawns = (container: DependencyContainer): void => {
         base.OpenZones = [
             ...new Set(allSpawns.map(p => p.BotZoneName).filter(Boolean))
         ].join(",");
-    });
+    }
 
     globalValues.indexedMapSpawns = indexedMapSpawns;
     globalValues.initialized = true;

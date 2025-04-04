@@ -41,7 +41,6 @@ export function buildBossWaves(
     const allBosses: Record<string, IBossLocationSpawn> = {};
     const strongestBossPerName: Record<string, IBossLocationSpawn> = {};
 
-    // Collect all boss templates across maps
     for (const loc of locationList) {
         for (const boss of loc.base.BossLocationSpawn ?? []) {
             if (boss.BossName && !allBosses[boss.BossName]) {
@@ -50,7 +49,6 @@ export function buildBossWaves(
         }
     }
 
-    // Per-map: clean existing spawn list, apply config overrides
     for (let i = 0; i < locationList.length; i++) {
         const location = locationList[i];
         const mapName = configLocations[i];
@@ -62,12 +60,10 @@ export function buildBossWaves(
             continue;
         }
 
-        // Remove unwanted bosses
         spawnList = spawnList.filter(
             (b: IBossLocationSpawn) => !bossesToRemoveFromPool.has(b.BossName)
         );
 
-        // Inject performance buffs
         if (advancedConfig.EnableBossPerformanceImprovements) {
             spawnList = spawnList.map((b: IBossLocationSpawn): IBossLocationSpawn => ({
                 ...b,
@@ -75,7 +71,6 @@ export function buildBossWaves(
             }));
         }
 
-        // Random Raider/Rogue groups
         if (randomRaiderGroup) {
             spawnList.push(buildBossBasedWave(
                 randomRaiderGroupChance, "1,2,2,2,3", "pmcBot", "pmcBot", "", location.base.EscapeTimeLimit
@@ -88,7 +83,6 @@ export function buildBossWaves(
             ));
         }
 
-        // Track strongest boss per map
         for (const boss of spawnList) {
             if (mainBossNameList.includes(boss.BossName)) {
                 const current = strongestBossPerName[boss.BossName];
@@ -101,7 +95,6 @@ export function buildBossWaves(
         location.base.BossLocationSpawn = spawnList;
     }
 
-    // 🔁 Global Boss Invasion Wave Setup
     if (!disableBosses && bossInvasion) {
         for (const name of bossList) {
             if (strongestBossPerName[name] && bossInvasionSpawnChance) {
@@ -111,7 +104,7 @@ export function buildBossWaves(
 
         for (const loc of locationList) {
             const existing = new Set(loc.base.BossLocationSpawn.map((b: IBossLocationSpawn) => b.BossName));
-            existing.add("bossKnight"); // exclude knight from reinsertion
+            existing.add("bossKnight");
 
             const additions = shuffle(Object.values(strongestBossPerName))
                 .filter((b: IBossLocationSpawn) => !existing.has(b.BossName))
@@ -131,7 +124,6 @@ export function buildBossWaves(
         }
     }
 
-    // 🔁 Boss Overrides Per Map
     let loggedHeader = false;
 
     for (let i = 0; i < configLocations.length; i++) {
@@ -180,7 +172,6 @@ export function buildBossWaves(
 
         spawns.push(...newBosses);
 
-        // 🔁 Final Adjustments & Sanity Pass
         locationList[i].base.BossLocationSpawn = spawns
             .map((b: IBossLocationSpawn): IBossLocationSpawn => {
                 if (mainBossNameList.includes(b.BossName)) {

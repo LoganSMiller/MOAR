@@ -1,4 +1,3 @@
-// routes.ts (MOAR Server)
 import path from "path";
 import fs from "fs";
 import { DependencyContainer } from "tsyringe";
@@ -86,7 +85,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("getDefaultConfig", [{
         url: "/moar/getDefaultConfig",
-        action: async () => {
+        action: async (): Promise<string> => {
             const safe = getSafeConfig(globalValues.baseConfig);
             return JSON.stringify(safe);
         }
@@ -94,7 +93,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("getServerConfigWithOverrides", [{
         url: "/moar/getServerConfigWithOverrides",
-        action: async () => {
+        action: async (): Promise<string> => {
             const merged = {
                 ...globalValues.baseConfig,
                 ...globalValues.overrideConfig
@@ -106,7 +105,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("moarGetServerConfig", [{
         url: "/moar/getServerConfig",
-        action: async () => {
+        action: async (): Promise<string> => {
             const safe = getSafeConfig(globalValues.baseConfig);
             return JSON.stringify(safe);
         }
@@ -114,7 +113,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("moarSetPreset", [{
         url: "/moar/setPreset",
-        action: async (_url: string, { Preset }: SetPresetRequest) => {
+        action: async (_url: string, { Preset }: SetPresetRequest): Promise<string> => {
             globalValues.forcedPreset = Preset;
             buildWaves(container);
             return `Current Preset: ${kebabToTitle(globalValues.forcedPreset || "Random")}`;
@@ -123,7 +122,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("setOverrideConfig", [{
         url: "/moar/setOverrideConfig",
-        action: async (_url: string, overrideConfig: Record<string, unknown>) => {
+        action: async (_url: string, overrideConfig: Record<string, unknown>): Promise<string> => {
             globalValues.overrideConfig = overrideConfig;
             buildWaves(container);
             return "Success";
@@ -132,7 +131,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("moarGetPresetsList", [{
         url: "/moar/getPresets",
-        action: async () => {
+        action: async (): Promise<string> => {
             const result = [
                 ...Object.keys(PresetWeightingsConfig).map(preset => ({
                     Name: kebabToTitle(preset),
@@ -147,12 +146,12 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("moarGetCurrentPreset", [{
         url: "/moar/currentPreset",
-        action: async () => JSON.stringify(globalValues.forcedPreset || "random")
+        action: async (): Promise<string> => JSON.stringify(globalValues.forcedPreset || "random")
     }], "moarGetCurrentPreset");
 
     staticRouter.registerStaticRouter("moarGetAnnouncePreset", [{
         url: "/moar/announcePreset",
-        action: async () => {
+        action: async (): Promise<string> => {
             const forced = globalValues.forcedPreset?.toLowerCase();
             const result = (forced === "random" || !forced)
                 ? globalValues.currentPreset
@@ -163,7 +162,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("moarAddBotSpawn", [{
         url: "/moar/addBotSpawn",
-        action: async (_url: string, req: AddSpawnRequest) => {
+        action: async (_url: string, req: AddSpawnRequest): Promise<string> => {
             updateBotSpawn(req.map, req.position, req.type);
             return "success";
         }
@@ -171,7 +170,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("moarDeleteBotSpawn", [{
         url: "/moar/deleteBotSpawn",
-        action: async (_url: string, req: AddSpawnRequest) => {
+        action: async (_url: string, req: AddSpawnRequest): Promise<string> => {
             deleteBotSpawn(req.map, req.position, req.type);
             return "success";
         }
@@ -179,7 +178,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("moarReloadConfig", [{
         url: "/moar/reloadConfig",
-        action: async () => {
+        action: async (): Promise<string> => {
             globalValues.reloadConfig?.();
             buildWaves(container);
             return "Config reloaded and wave logic rebuilt.";
@@ -188,7 +187,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("moarRaidStartUpdater", [{
         url: "/client/raid/configuration",
-        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown) => {
+        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown): Promise<unknown> => {
             buildWaves(container);
             return output;
         }
@@ -196,7 +195,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     staticRouter.registerStaticRouter("moarUpdater", [{
         url: "/client/match/local/end",
-        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown) => {
+        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown): Promise<unknown> => {
             buildWaves(container);
             return output;
         }
@@ -204,7 +203,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     dynamicRouter.registerDynamicRouter("moarFikaSync", [{
         route: "moar/syncPreset",
-        action: async (_url: string, info: PresetSyncPacket) => {
+        action: async (_url: string, info: PresetSyncPacket): Promise<string> => {
             console.log("[MOAR] Dynamic route FIKA preset sync received:", info?.PresetName);
             globalValues.forcedPreset = info?.PresetName;
             buildWaves(container);
@@ -214,7 +213,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     dynamicRouter.registerDynamicRouter("moarBuildWavesDynamic", [{
         route: "moar/buildWaves",
-        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown) => {
+        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown): Promise<unknown> => {
             buildWaves(container);
             return output;
         }

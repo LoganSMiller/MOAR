@@ -3,25 +3,25 @@
  */
 export class PresetSyncPacket {
     /** Internal name of the preset (e.g., "live-like", "chaos-mode"). */
-    PresetName: string;
+    public readonly PresetName: string;
 
     /** Human-readable label of the preset (e.g., "Live-Like", "Chaos Mode"). */
-    PresetLabel: string;
+    public readonly PresetLabel: string;
 
     /**
      * Constructs a PresetSyncPacket.
-     * @param presetName - Internal preset name
-     * @param presetLabel - Human-readable label
+     * @param presetName - Internal preset name (slug)
+     * @param presetLabel - User-facing label for the preset
      */
     constructor(presetName: string, presetLabel: string) {
-        this.PresetName = presetName;
-        this.PresetLabel = presetLabel;
+        this.PresetName = presetName.trim().toLowerCase() || "unknown";
+        this.PresetLabel = presetLabel.trim() || "Unknown";
     }
 
     /**
-     * Serializes the packet to JSON for sending over network or storage.
+     * Serializes the packet into a plain object for network transmission.
      */
-    toJSON(): Record<string, string> {
+    public toJSON(): Record<string, string> {
         return {
             PresetName: this.PresetName,
             PresetLabel: this.PresetLabel
@@ -29,13 +29,12 @@ export class PresetSyncPacket {
     }
 
     /**
-     * Constructs a PresetSyncPacket from plain object (e.g., parsed JSON).
-     * @param data - Object containing PresetName and PresetLabel
+     * Reconstructs a PresetSyncPacket from a plain object.
+     * @param data - Partial data object (e.g., parsed JSON)
      */
-    static fromJSON(data: Partial<PresetSyncPacket>): PresetSyncPacket {
-        return new PresetSyncPacket(
-            data.PresetName ?? "unknown",
-            data.PresetLabel ?? "Unknown"
-        );
+    public static fromJSON(data: Partial<PresetSyncPacket>): PresetSyncPacket {
+        const name = typeof data?.PresetName === "string" ? data.PresetName : "unknown";
+        const label = typeof data?.PresetLabel === "string" ? data.PresetLabel : "Unknown";
+        return new PresetSyncPacket(name, label);
     }
 }

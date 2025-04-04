@@ -2,7 +2,7 @@ import { IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
 import { HealthPart, HealthPartList } from "./types";
 
 /**
- * Ensures a valid numeric time value; returns 0 if invalid.
+ * Ensures a valid numeric time value. Returns 0 if invalid.
  */
 function safeTime(value: unknown): number {
     const num = typeof value === "number" ? value : Number(value);
@@ -10,11 +10,11 @@ function safeTime(value: unknown): number {
 }
 
 /**
- * Logs a warning if a time value is unsafe — development only.
+ * Logs a warning if a time value is unsafe. Dev-only.
  */
 function assertTimeSafe(value: number, context = "Unknown"): void {
     if (!Number.isFinite(value) || isNaN(value)) {
-        console.warn(`[MOAR]  Unsafe time value detected in ${context}:`, value);
+        console.warn(`[MOAR] ⚠ Unsafe time value in ${context}:`, value);
     }
 }
 
@@ -55,7 +55,7 @@ export function buildBossBasedWave(
 }
 
 /**
- * Configuration for a bot wave series.
+ * Configuration structure for a bot wave series.
  */
 export interface BotWaveOptions {
     count: number;
@@ -72,7 +72,8 @@ export interface BotWaveOptions {
 }
 
 /**
- * Builds a series of bot waves (PMC, Scav, etc.).
+ * Builds a list of waves (PMC, Scav, etc.) and returns them without side effects.
+ * Caller is responsible for merging into BossLocationSpawn and deduplication.
  */
 export function buildBotWaves(
     options: BotWaveOptions,
@@ -100,9 +101,9 @@ export function buildBotWaves(
         const time = initialOffset + safeTime(Math.round(rawTime));
         assertTimeSafe(time, `buildBotWaves (wave ${i})`);
 
-        waves.push({
+        const wave: IBossLocationSpawn = {
             BossChance: groupChance,
-            BossZone: zones[i % zones.length] || "",
+            BossZone: zones.length > 0 ? zones[i % zones.length] : "fallbackZone",
             BossName: template,
             BossEscortType: "followerTest",
             BossEscortAmount: groupSize > 0 ? `${groupSize}` : "0",
@@ -119,21 +120,28 @@ export function buildBotWaves(
             Supports: [],
             Time: time,
             Template: template
-        });
+        };
+
+        waves.push(wave);
     }
 
-    location.base.BossLocationSpawn.push(...waves);
     return waves;
 }
 
 /**
- * Builds a fixed set of zombie waves.
+ * Builds a fixed set of zombie waves with template overrides.
+ * @param count - Number of waves
+ * @param timeLimit - Total time span for the waves (seconds)
+ * @param distribution - Even or random interval between waves
+ * @param groupId - Unused, reserved for future group tracking
+ * @param template - Bot template name (default: "cursedAssault")
  */
 export function buildZombie(
     count: number,
     timeLimit: number,
     distribution: "even" | "random" = "even",
-    groupId = 9999
+    groupId = 9999,
+    template: string = "cursedAssault"
 ): IBossLocationSpawn[] {
     const waves: IBossLocationSpawn[] = [];
     const baseTime = count > 0 ? timeLimit / count : 0;
@@ -147,7 +155,7 @@ export function buildZombie(
         waves.push({
             BossChance: 100,
             BossZone: "",
-            BossName: "cursedAssault",
+            BossName: template,
             BossEscortType: "followerTest",
             BossEscortAmount: "0",
             BossEscortDifficult: "easy",
@@ -162,7 +170,7 @@ export function buildZombie(
             IgnoreMaxBots: false,
             Supports: [],
             Time: time,
-            Template: "cursedAssault"
+            Template: template
         });
     }
 
@@ -170,7 +178,8 @@ export function buildZombie(
 }
 
 /**
- * Returns a health override configuration for zombie body parts.
+ * Builds a health override object by percentage for all body parts.
+ * Used for scaling zombie durability.
  */
 export function getHealthBodyPartsByPercentage(percentage: number): HealthPartList {
     const createPart = (hp: number): HealthPart => ({
@@ -190,7 +199,7 @@ export function getHealthBodyPartsByPercentage(percentage: number): HealthPartLi
 }
 
 /**
- * Known zombie bot template types.
+ * Known zombie bot template types for override processing.
  */
 export const zombieTypes: string[] = [
     "cursedAssault",

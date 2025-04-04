@@ -1,12 +1,21 @@
 import { ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
-import type { Position } from "../types";
-import crypto from "crypto";
+import { Ixyz, createIxyz } from "../Models/Ixyz";
+import config from "../../config/config.json";
 
 import PlayerSpawns from "../../config/Spawns/playerSpawns.json";
 import PmcSpawns from "../../config/Spawns/pmcSpawns.json";
 import ScavSpawns from "../../config/Spawns/scavSpawns.json";
 import SniperSpawns from "../../config/Spawns/sniperSpawns.json";
-import config from "../../config/config.json";
+
+import crypto from "crypto";
+
+/** === Types === */
+type Side = "Savage" | "Pmc";
+type Category = "Player" | "Bot" | "Coop" | "Group" | "Opposite";
+
+/** === Constants === */
+const DEFAULT_RADIUS = config.spawnRadius ?? 20;
+const DEFAULT_DELAY = config.spawnDelay ?? 4;
 
 /** Generate a UUIDv4 string */
 function uuidv4(): string {
@@ -16,6 +25,16 @@ function uuidv4(): string {
 /** Random rotation from 0–359 degrees */
 function random360(): number {
     return Math.floor(Math.random() * 360);
+}
+
+/** Safe Ixyz conversion from any unknown object */
+function safeIxyz(input: unknown): Ixyz {
+    if (typeof input === "object" && input !== null && "x" in input && "y" in input && "z" in input) {
+        return createIxyz(input as { x: number; y: number; z: number });
+    }
+
+    console.warn("[MOAR] Invalid coordinates passed to safeIxyz(), returning fallback (0,0,0).");
+    return createIxyz({ x: 0, y: 0, z: 0 });
 }
 
 /** Find the closest BotZoneName to a given position */
@@ -35,7 +54,12 @@ export function getClosestZone(points: ISpawnPointParam[], x: number, y: number,
         }
     }
 
-    return closest?.BotZoneName || "";
+    const result = closest?.BotZoneName || "fallback_zone";
+    if (config.debug && !closest) {
+        console.warn(`[MOAR] No BotZone found near (${x}, ${y}, ${z}), using fallback.`);
+    }
+
+    return result;
 }
 
 /** Sort spawn points by distance to a given coordinate */
@@ -49,11 +73,11 @@ export function getSortedSpawnPointList(spawns: ISpawnPointParam[], x: number, y
 
 /** Create a new ISpawnPointParam with standard settings */
 function createSpawnPoint(
-    coords: Position,
+    coords: Ixyz,
     zone: string,
-    categories: string[],
-    sides: string[],
-    radius = 20,
+    categories: Category[],
+    sides: Side[],
+    radius = DEFAULT_RADIUS,
     coreId = 0
 ): ISpawnPointParam {
     return {
@@ -64,10 +88,10 @@ function createSpawnPoint(
             _props: { Radius: radius }
         },
         CorePointId: coreId,
-        DelayToCanSpawnSec: 4,
+        DelayToCanSpawnSec: DEFAULT_DELAY,
         Id: uuidv4(),
         Infiltration: "",
-        Position: coords,
+        Position: coords.toObject(),
         Rotation: random360(),
         Sides: sides
     };
@@ -82,8 +106,8 @@ export const AddCustomBotSpawnPoints = (spawnParams: ISpawnPointParam[], map: ke
         return spawnParams;
     }
 
-    const newSpawns = custom.map((coords: Position) =>
-        createSpawnPoint(coords, getClosestZone(spawnParams, coords.x, coords.y, coords.z), ["Bot"], ["Savage"])
+    const newSpawns = custom.map((coords) =>
+        createSpawnPoint(safeIxyz(coords), getClosestZone(spawnParams, coords.x, coords.y, coords.z), ["Bot"], ["Savage"])
     );
 
     return [...spawnParams, ...newSpawns];
@@ -96,8 +120,8 @@ export const AddCustomPmcSpawnPoints = (spawnParams: ISpawnPointParam[], map: ke
         return spawnParams;
     }
 
-    const newSpawns = custom.map((coords: Position) =>
-        createSpawnPoint(coords, getClosestZone(spawnParams, coords.x, coords.y, coords.z), ["Coop", Math.random() > 0.5 ? "Group" : "Opposite"], ["Pmc"])
+    const newSpawns = custom.map((coords: Ixyz) =>
+        createSpawnPoint(safeIxyz(coords), getClosestZone(spawnParams, coords.x, coords.y, coords.z), ["Coop", Math.random() > 0.5 ? "Group" : "Opposite"], ["Pmc"])
     );
 
     return [...spawnParams, ...newSpawns];
@@ -110,14 +134,15 @@ export const AddCustomSniperSpawnPoints = (spawnParams: ISpawnPointParam[], map:
         return spawnParams;
     }
 
-    const newSpawns = custom.map((coords: Position, i: number) =>
-        createSpawnPoint(coords, getClosestZone(spawnParams, coords.x, coords.y, coords.z) || `custom_snipe_${i}`, ["Bot"], ["Savage"])
-    );
+    const newSpawns = custom.map((coords, i: number) => {
+        const zone = getClosestZone(spawnParams, coords.x, coords.y, coords.z);
+        return createSpawnPoint(safeIxyz(coords), zone || `custom_snipe_${i}`, ["Bot"], ["Savage"]);
+    });
 
     return [...spawnParams, ...newSpawns];
 };
 
-/** Custom player spawn generator — supports Coop grouping */
+/** Coop-safe player spawn builder (deduplicated, unique CorePointId, isolated BotZoneName) */
 export const BuildCustomPlayerSpawnPoints = (spawnParams: ISpawnPointParam[], map: keyof typeof PlayerSpawns): ISpawnPointParam[] => {
     const custom = PlayerSpawns[map];
     const existing = spawnParams.filter(p => p.Categories?.includes("Player") && p.Infiltration);
@@ -127,9 +152,9 @@ export const BuildCustomPlayerSpawnPoints = (spawnParams: ISpawnPointParam[], ma
         return existing;
     }
 
-    const coopZone = "coop_start_zone";
-    const newSpawns = custom.map((coords: Position, index: number) =>
-        createSpawnPoint(coords, coopZone, ["Player"], ["Pmc"], 1, index)
+    const baseZone = `coop_player_zone_${map}`;
+    const newSpawns = custom.map((coords, index: number) =>
+        createSpawnPoint(safeIxyz(coords), `${baseZone}_${index}`, ["Player"], ["Pmc"], 1, 1000 + index)
     );
 
     if (config.debug) {
@@ -167,12 +192,12 @@ export function cleanClosest(spawns: ISpawnPointParam[], mapIndex: number, keepP
 
 /** Culls custom spawn positions if they're too close to vanilla points */
 export function removeClosestSpawnsFromCustomBots(
-    source: Record<string, Position[]>,
+    source: Record<string, Ixyz[]>,
     targetPoints: ISpawnPointParam[],
     map: keyof typeof source,
     zoneKey: string
-): Position[] {
-    const keep: Position[] = [];
+): Ixyz[] {
+    const keep: Ixyz[] = [];
     const thresholdSq = Math.pow(map === "sandbox_high" ? 8 : 6, 2);
 
     for (const coords of source[map] ?? []) {

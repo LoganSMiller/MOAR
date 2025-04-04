@@ -1,76 +1,93 @@
 import { ILocation } from "@spt/models/eft/common/ILocation";
 import { ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
 import { configLocations } from "./constants";
-import config from "../../config/config.json";
 import { getRandomInArray } from "../utils";
 import globalValues from "../GlobalValues";
 import getSortedSpawnPointList from "./spawnZoneUtils";
+import type { MOARConfig } from "../types";
 
 /**
  * Updates spawn zones to favor player-centric clustering.
- * Prioritizes realism and performance by reducing spawn point spread.
+ * Ensures stability across vanilla, Coop, and Headless FIKA setups.
+ *
+ * @param locationList - The full list of game locations
+ * @param activeConfig - The active MOAR config in use
  */
 export default function updateSpawnLocations(
     locationList: ILocation[],
-    activeConfig: typeof config
+    activeConfig: MOARConfig
 ): void {
+    const maxPlayerSpawns = 12;
+    const maxDistanceSquared = 30 * 30;
+
     for (let index = 0; index < locationList.length; index++) {
         const mapName = configLocations[index];
         const mapSpawns = globalValues.indexedMapSpawns?.[mapName];
 
-        if (!mapSpawns?.length) {
+        if (!Array.isArray(mapSpawns) || mapSpawns.length === 0) {
             if (activeConfig.debug?.enabled) {
                 console.warn(`[MOAR] Skipping spawn update for ${mapName}: no indexedMapSpawns found.`);
             }
             continue;
         }
 
-        const playerSpawns = mapSpawns.filter(spawn => spawn.type === "player");
+        const playerSpawns = mapSpawns.filter(spawn =>
+            spawn.type === "player" && spawn.Position && typeof spawn.Position.x === "number"
+        );
 
         if (playerSpawns.length === 0) {
             if (activeConfig.debug?.enabled) {
-                console.warn(`[MOAR] No player spawns available for ${mapName}.`);
+                console.warn(`[MOAR] No valid player spawns for ${mapName}.`);
             }
             continue;
         }
 
-        const selectedPlayerSpawn = getRandomInArray(playerSpawns);
-        if (!selectedPlayerSpawn?.Position) {
+        const selected = getRandomInArray(playerSpawns);
+        if (!selected?.Position || selected.Position == null) {
             if (activeConfig.debug?.enabled) {
-                console.warn(`[MOAR] Invalid player spawn position for ${mapName}.`);
+                console.warn(`[MOAR] Invalid selected player spawn for ${mapName}.`);
             }
             continue;
         }
 
-        globalValues.playerSpawn = selectedPlayerSpawn;
+        // Assign selected player spawn — only once and safely
+        if (!globalValues.playerSpawn || !globalValues.playerSpawn.Position) {
+            globalValues.playerSpawn = selected;
+        }
 
-        const { x, y, z } = selectedPlayerSpawn.Position;
+        const { x, y, z } = selected.Position;
         const sortedSpawns = getSortedSpawnPointList(mapSpawns, x, y, z);
 
         const clusteredPlayerSpawns: ISpawnPointParam[] = [];
-        const maxPlayerSpawns = 12;
-        const maxDistSquared = 30 * 30;
 
         for (const spawn of sortedSpawns) {
-            if (spawn.type !== "player") continue;
+            if (spawn.type !== "player" || !spawn.Position) continue;
 
             const dx = spawn.Position.x - x;
             const dy = spawn.Position.y - y;
             const dz = spawn.Position.z - z;
-            const distSq = dx * dx + dy * dy + dz * dz;
+            const distanceSq = dx * dx + dy * dy + dz * dz;
 
-            if (distSq <= maxDistSquared && clusteredPlayerSpawns.length < maxPlayerSpawns) {
+            if (distanceSq <= maxDistanceSquared && clusteredPlayerSpawns.length < maxPlayerSpawns) {
                 clusteredPlayerSpawns.push(spawn);
             }
         }
 
+        const nonPlayerSpawns = sortedSpawns.filter(spawn => spawn.type !== "player");
+
+        // Defensive: Ensure structure exists before writing
+        if (!locationList[index]?.base?.SpawnPointParams) {
+            locationList[index].base.SpawnPointParams = [];
+        }
+
+        // Overwrite the spawn list with updated clustering
         locationList[index].base.SpawnPointParams = [
             ...clusteredPlayerSpawns,
-            ...sortedSpawns.filter(spawn => spawn.type !== "player")
+            ...nonPlayerSpawns
         ];
 
         if (activeConfig.debug?.enabled) {
-            console.log(`[MOAR] ${mapName}: limited to ${clusteredPlayerSpawns.length} clustered player spawns.`);
+            console.log(`[MOAR] ${mapName}: using ${clusteredPlayerSpawns.length} clustered player spawns (of ${playerSpawns.length}).`);
         }
     }
 }
