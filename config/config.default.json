@@ -1,0 +1,55 @@
+{
+  "defaultPreset": "live-like",
+  "enableBotSpawning": true,
+  "spawnSmoothing": true,
+  "randomSpawns": false,
+  "startingPmcs": false,
+
+  "pmcDifficulty": 0.6,
+  "scavDifficulty": 0.4,
+  "zombieHealth": 1,
+
+  "pmcWaveQuantity": 1,
+  "scavWaveQuantity": 1,
+  "zombieWaveQuantity": 1,
+
+  "pmcWaveDistribution": 0.6,
+  "scavWaveDistribution": 1,
+  "zombieWaveDistribution": 0.8,
+
+  "pmcGroupChance": 0.2,
+  "scavGroupChance": 0.2,
+  "sniperGroupChance": 0.1,
+
+  "pmcMaxGroupSize": 4,
+  "scavMaxGroupSize": 3,
+  "sniperMaxGroupSize": 1,
+
+  "spawnRadius": 20,
+  "spawnDelay": 4,
+
+  "maxBotCap": 20,
+  "maxBotPerZone": 6,
+
+  "bossOpenZones": false,
+  "disableBosses": false,
+  "mainBossChanceBuff": 0,
+  "bossInvasion": false,
+  "bossInvasionSpawnChance": 5,
+  "gradualBossInvasion": true,
+  "enableBossOverrides": true,
+
+  "randomRaiderGroup": false,
+  "randomRaiderGroupChance": 10,
+  "randomRogueGroup": false,
+  "randomRogueGroupChance": 10,
+
+  "zombiesEnabled": false,
+  "forceHotzonesOnly": false,
+
+  "debug": {
+    "enabled": false,
+    "logSpawnData": false,
+    "logBossOverrides": false
+  }
+}

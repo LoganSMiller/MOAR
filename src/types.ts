@@ -1,27 +1,70 @@
+import { EPlayerSide } from "@spt-aki/models/enums/EPlayerSide";
+import { EBotType } from "@spt-aki/models/enums/EBotType";
+
+/**
+ * Valid bot side types (converted to EFT enum-safe numbers).
+ */
+export type Side = EPlayerSide;
+
+/**
+ * Valid bot categories as defined in EFT/SPT (e.g. assault, pmcBot, bossKilla).
+ */
+export type Category = EBotType;
+
+/**
+ * Parses a string into a valid EPlayerSide enum value.
+ * Defaults to Savage if unrecognized.
+ */
+export function parseSide(value: string): EPlayerSide {
+    switch (value.toLowerCase()) {
+        case "usec":
+            return EPlayerSide.Usec;
+        case "bear":
+            return EPlayerSide.Bear;
+        case "scav":
+        case "savage":
+            return EPlayerSide.Savage;
+        default:
+            console.warn(`[MOAR] Unknown side '${value}', defaulting to Savage`);
+            return EPlayerSide.Savage;
+    }
+}
+
+/**
+ * Parses a string into a valid EBotType category value.
+ * Defaults to "assault" if unrecognized.
+ */
+export function parseCategory(value: string): EBotType {
+    const lower = value.toLowerCase();
+    const values = Object.values(EBotType) as string[];
+    if (values.includes(lower)) {
+        return lower as EBotType;
+    }
+
+    console.warn(`[MOAR] Unknown category '${value}', defaulting to 'assault'`);
+    return EBotType.assault;
+}
+
 /**
  * Core MOAR config structure, representing values from config.json.
  */
 export interface MOARConfig {
-    // === Preset toggles ===
     defaultPreset: string;
     enableBotSpawning: boolean;
     spawnSmoothing: boolean;
     randomSpawns: boolean;
     startingPmcs: boolean;
 
-    // === Spawn control ===
     smoothingDistribution: number;
     spawnMinDistance: number;
     spawnMaxDistance: number;
     spawnRadius: number;
     spawnDelay: number;
 
-    // === Difficulty tuning ===
     pmcDifficulty: number;
     scavDifficulty: number;
     zombieHealth: number;
 
-    // === Wave quantity and distribution ===
     pmcWaveQuantity: number;
     scavWaveQuantity: number;
     zombieWaveQuantity: number;
@@ -29,7 +72,6 @@ export interface MOARConfig {
     scavWaveDistribution: number;
     zombieWaveDistribution: number;
 
-    // === Grouping logic ===
     pmcGroupChance: number;
     scavGroupChance: number;
     sniperGroupChance: number;
@@ -38,11 +80,9 @@ export interface MOARConfig {
     scavMaxGroupSize: number;
     sniperMaxGroupSize: number;
 
-    // === Bot caps ===
     maxBotCap: number;
     maxBotPerZone: number;
 
-    // === Boss spawning logic ===
     bossOpenZones: boolean;
     disableBosses: boolean;
     mainBossChanceBuff: number;
@@ -51,21 +91,17 @@ export interface MOARConfig {
     gradualBossInvasion: boolean;
     enableBossOverrides: boolean;
 
-    // === Raiders and Rogues ===
     randomRaiderGroup: boolean;
     randomRaiderGroupChance: number;
     randomRogueGroup: boolean;
     randomRogueGroupChance: number;
 
-    // === Zombie and restriction toggles ===
     zombiesEnabled: boolean;
     forceHotzonesOnly: boolean;
 
-    // === Optional systems ===
     scavMarksmenEnabled?: boolean;
     pmcWavesEnabled?: boolean;
 
-    // === Debug options ===
     debug: {
         enabled: boolean;
         logSpawnData: boolean;

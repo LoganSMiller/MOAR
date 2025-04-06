@@ -66,7 +66,7 @@ export function buildZombieWaves(
         const timeLimit = escapeTime * 60;
         const distribution = zombieWaveDistribution === 1 ? "random" : "even";
 
-        const zombieTemplate = validTemplates.includes("zombie") ? "zombie" : WildSpawnType.CRAZY_ASSAULT;
+        const zombieTemplate = validTemplates.includes("zombie") ? "zombie" : WildSpawnType.cursedAssault;
 
         const zombieWaves = buildZombie(
             totalWaves,

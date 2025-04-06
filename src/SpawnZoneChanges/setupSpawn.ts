@@ -18,7 +18,6 @@ import {
     AddCustomPmcSpawnPoints,
     AddCustomSniperSpawnPoints,
     cleanClosest,
-    getClosestZone,
     removeClosestSpawnsFromCustomBots,
     BuildCustomPlayerSpawnPoints
 } from "../Spawning/spawnZoneUtils";
@@ -129,6 +128,13 @@ export const setupSpawns = (container: DependencyContainer): void => {
 
         const playerSpawns = BuildCustomPlayerSpawnPoints(spawnParams, map);
 
+        if (!globalValues.playerSpawn && playerSpawns.length > 0) {
+            globalValues.playerSpawn = playerSpawns[0];
+            if (advancedConfig.debug) {
+                console.log(`[MOAR] Set default globalValues.playerSpawn from ${map}: (${playerSpawns[0].Position.x}, ${playerSpawns[0].Position.y}, ${playerSpawns[0].Position.z})`);
+            }
+        }
+
         scavSpawns = cleanClosest(AddCustomBotSpawnPoints(scavSpawns, map), mapIndex).map((point) =>
             applyColliderRadiusClamp({
                 ...point,
@@ -142,11 +148,9 @@ export const setupSpawns = (container: DependencyContainer): void => {
         pmcSpawns = cleanClosest(AddCustomPmcSpawnPoints(pmcSpawns, map), mapIndex).map((point) =>
             applyColliderRadiusClamp({
                 ...point,
-                BotZoneName: isGZ
-                    ? "ZoneSandbox"
-                    : getClosestZone(scavSpawns, point.Position.x, point.Position.y, point.Position.z),
-                Categories: ["Coop", "Group"],
-                Sides: ["Random"],
+                BotZoneName: isGZ ? "ZoneSandbox" : point.BotZoneName,
+                Categories: ["Coop"],
+                Sides: ["Usec", "Bear"],
                 CorePointId: 0
             }, radiusLimit)
         );

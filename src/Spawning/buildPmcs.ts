@@ -104,8 +104,8 @@ export default function buildPmcs(
         const initialOffsetUsec = initialSpawnDelay + Math.round(Math.random() * 10);
         const initialOffsetBear = initialSpawnDelay + Math.round(Math.random() * 10);
 
-        const UsecTemplate = validTemplates.includes(WildSpawnType.Usec) ? WildSpawnType.Usec : "Usec";
-        const BearTemplate = validTemplates.includes(WildSpawnType.Bear) ? WildSpawnType.Bear : "Bear";
+        const UsecTemplate = validTemplates.includes("Usec") ? "Usec" : WildSpawnType.Usec;
+        const BearTemplate = validTemplates.includes("Bear") ? "Bear" : WildSpawnType.Bear;
 
         const UsecWaves = buildBotWaves({
             count: half,

@@ -7,7 +7,28 @@ const LOG_PREFIX = "[MOAR:SpawnUtils]";
 const DELETE_DISTANCE_THRESHOLD = 15;
 const DEBUG = false;
 
-export type BotSpawnType = "player" | "pmc" | "scav" | "sniper";
+export type BotSpawnType =
+    | "player"
+    | "pmc"
+    | "scav"
+    | "sniper"
+    | "boss"
+    | "zombie"
+    | "mixed";
+
+/**
+ * Ensures a file exists; creates an empty object file if missing.
+ */
+function ensureJsonFileExists(filePath: string): void {
+    if (!fs.existsSync(SPAWN_DIR)) {
+        fs.mkdirSync(SPAWN_DIR, { recursive: true });
+    }
+
+    if (!fs.existsSync(filePath)) {
+        fs.writeFileSync(filePath, JSON.stringify({}, null, 2), "utf8");
+        console.warn(`${LOG_PREFIX} Auto-created missing file: ${filePath}`);
+    }
+}
 
 /**
  * Generic JSON updater with error handling and type safety.
@@ -18,13 +39,14 @@ export const updateJsonFile = <T>(
     successMessage: string
 ): void => {
     try {
+        ensureJsonFileExists(filePath);
         const raw = fs.readFileSync(filePath, "utf8");
         const jsonData = JSON.parse(raw) as T;
 
         callback(jsonData);
 
         fs.writeFileSync(filePath, JSON.stringify(jsonData, null, 2), "utf8");
-        console.log(`${LOG_PREFIX} ${successMessage}`);
+        console.log(`${LOG_PREFIX} ${successMessage} → ${path.basename(filePath)}`);
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`${LOG_PREFIX} Failed to update ${filePath}:`, message);
@@ -43,9 +65,9 @@ export const updateBotSpawn = (
     const key = map.toLowerCase();
 
     updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
-        value.y += 0.5;
+        const adjusted = new Ixyz(value.x, value.y + 0.5, value.z);
         jsonData[key] ??= [];
-        jsonData[key].push(value);
+        jsonData[key].push(adjusted);
     }, `Added ${type} spawn to '${map}'`);
 };
 
@@ -117,7 +139,7 @@ export const updateAllBotSpawns = (
             jsonData[map] = deduped;
 
             if (DEBUG) {
-                console.log(`${LOG_PREFIX} [${map}] ${targetType} spawns updated (${deduped.length} points)`);
+                console.log(`${LOG_PREFIX} [${map}] ${safeType} spawns updated (${deduped.length} points)`);
             }
         }
     }, `Overwrote all ${safeType} spawns (deduplicated)`);

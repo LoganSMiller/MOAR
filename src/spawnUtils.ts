@@ -1,5 +1,29 @@
 import { IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
+import { EPlayerSide } from "@spt-aki/models/enums/EPlayerSide";
 import { HealthPart, HealthPartList } from "./types";
+
+/**
+ * Enum-safe conversion of side strings to EPlayerSide numeric values.
+ * Fallbacks to Savage (3) on error.
+ */
+function normalizeSpawnSide(side: string): EPlayerSide {
+    switch (side.toLowerCase()) {
+        case "usec":
+            return EPlayerSide.Usec;
+        case "bear":
+            return EPlayerSide.Bear;
+        case "savage":
+        case "scav":
+            return EPlayerSide.Savage;
+        default:
+            console.warn(`[MOAR] Unknown side: ${side}, defaulting to Savage`);
+            return EPlayerSide.Savage;
+    }
+}
+
+function normalizeSides(sides: string[]): EPlayerSide[] {
+    return sides.map(normalizeSpawnSide);
+}
 
 /**
  * Ensures a valid numeric time value. Returns 0 if invalid.
@@ -19,37 +43,45 @@ function assertTimeSafe(value: number, context = "Unknown"): void {
 }
 
 /**
- * Builds a single boss-style spawn wave.
+ * Creates a boss wave spawn entry with safe defaults.
  */
 export function buildBossBasedWave(
     chance: number,
     escortAmount: string,
     bossName: string,
     template: string,
-    zone: string = "",
-    time: number = 15
+    zone: string,
+    escapeTimeLimit: number
 ): IBossLocationSpawn {
-    const safe = safeTime(time);
-    assertTimeSafe(safe, "buildBossBasedWave");
+    const isScav = ["assault", "cursedassault", "crazyassaultevent"].includes(bossName.toLowerCase());
+    const isRogueOrRaider = ["exusec", "pmcbot", "arenafighter", "arenafighterevent"].includes(bossName.toLowerCase());
+
+    const rawSides = isScav ? ["Savage"] : ["Usec", "Bear"];
+    const sides = normalizeSides(rawSides);
 
     return {
         BossChance: chance,
-        BossZone: zone,
-        BossName: bossName,
-        BossEscortType: "followerTest",
         BossEscortAmount: escortAmount,
-        BossEscortDifficult: "normal",
-        BossDifficult: "normal",
+        BossName: bossName,
         BossPlayer: false,
-        BossEscort: [],
+        BossZone: zone || "fallback_zone",
+        BossEscortType: isScav ? "assault" : isRogueOrRaider ? "exUsec" : bossName,
+        Difficulty: template,
+        BossDifficult: template,
+        BossEscortDifficult: template,
+        SpawnAlways: false,
+        SupportsBossName: "",
         TriggerId: "",
         TriggerName: "",
-        UseDefaultSpawns: false,
-        Visible: true,
+        Time: Math.floor(Math.random() * escapeTimeLimit),
+        RandomTimeSpawn: false,
         ForceSpawn: false,
         IgnoreMaxBots: false,
+        Sides: sides,
+        BossEscort: [],
+        UseDefaultSpawns: false,
+        Visible: true,
         Supports: [],
-        Time: safe,
         Template: template
     };
 }
@@ -73,7 +105,6 @@ export interface BotWaveOptions {
 
 /**
  * Builds a list of waves (PMC, Scav, etc.) and returns them without side effects.
- * Caller is responsible for merging into BossLocationSpawn and deduplication.
  */
 export function buildBotWaves(
     options: BotWaveOptions,
@@ -89,11 +120,14 @@ export function buildBotWaves(
         template,
         forceSpawn = false,
         distribution = "even",
-        initialOffset = 0
+        initialOffset = 0,
+        isScav = false
     } = options;
 
     const waves: IBossLocationSpawn[] = [];
     const baseTime = count > 0 ? timeLimit / count : 0;
+    const rawSides = isScav ? ["Savage"] : ["Usec", "Bear"];
+    const sides = normalizeSides(rawSides);
 
     for (let i = 0; i < count; i++) {
         const offset = distribution === "random" ? Math.random() * 10 : 0;
@@ -105,7 +139,7 @@ export function buildBotWaves(
             BossChance: groupChance,
             BossZone: zones.length > 0 ? zones[i % zones.length] : "fallbackZone",
             BossName: template,
-            BossEscortType: "followerTest",
+            BossEscortType: isScav ? "assault" : "exUsec",
             BossEscortAmount: groupSize > 0 ? `${groupSize}` : "0",
             BossEscortDifficult: difficulty,
             BossDifficult: difficulty,
@@ -119,7 +153,8 @@ export function buildBotWaves(
             IgnoreMaxBots: false,
             Supports: [],
             Time: time,
-            Template: template
+            Template: template,
+            Sides: sides
         };
 
         waves.push(wave);
@@ -130,11 +165,6 @@ export function buildBotWaves(
 
 /**
  * Builds a fixed set of zombie waves with template overrides.
- * @param count - Number of waves
- * @param timeLimit - Total time span for the waves (seconds)
- * @param distribution - Even or random interval between waves
- * @param groupId - Unused, reserved for future group tracking
- * @param template - Bot template name (default: "cursedAssault")
  */
 export function buildZombie(
     count: number,
@@ -156,7 +186,7 @@ export function buildZombie(
             BossChance: 100,
             BossZone: "",
             BossName: template,
-            BossEscortType: "followerTest",
+            BossEscortType: "assault",
             BossEscortAmount: "0",
             BossEscortDifficult: "easy",
             BossDifficult: "easy",
@@ -170,7 +200,8 @@ export function buildZombie(
             IgnoreMaxBots: false,
             Supports: [],
             Time: time,
-            Template: template
+            Template: template,
+            Sides: [EPlayerSide.Savage]
         });
     }
 
@@ -179,13 +210,9 @@ export function buildZombie(
 
 /**
  * Builds a health override object by percentage for all body parts.
- * Used for scaling zombie durability.
  */
 export function getHealthBodyPartsByPercentage(percentage: number): HealthPartList {
-    const createPart = (hp: number): HealthPart => ({
-        Current: hp,
-        Maximum: hp
-    });
+    const createPart = (hp: number): HealthPart => ({ Current: hp, Maximum: hp });
 
     return {
         Head: createPart(percentage),

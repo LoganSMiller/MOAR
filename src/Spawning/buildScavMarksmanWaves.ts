@@ -68,8 +68,8 @@ export default function buildScavMarksmanWaves(
 
         const timeLimit = (typeof escapeLimit === "number" && !isNaN(escapeLimit) ? escapeLimit : baseEscapeTime) * 60;
 
-        const assaultTemplate = validTemplates.includes(WildSpawnType.ASSAULT) ? WildSpawnType.ASSAULT : "assault";
-        const marksmanTemplate = validTemplates.includes(WildSpawnType.MARKSMAN) ? WildSpawnType.MARKSMAN : "marksman";
+        const assaultTemplate = validTemplates.includes("assault") ? "assault" : WildSpawnType.assault;
+        const marksmanTemplate = validTemplates.includes("marksman") ? "marksman" : WildSpawnType.marksman;
 
         const scavWaves: IBossLocationSpawn[] = buildBotWaves({
             count: totalScavWaves,

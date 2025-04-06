@@ -8,11 +8,12 @@ import ScavSpawns from "../../config/Spawns/scavSpawns.json";
 import SniperSpawns from "../../config/Spawns/sniperSpawns.json";
 
 import crypto from "crypto";
-import { FikaBackendUtils } from "../../FIKA/FikaBackendUtils";
+import { EPlayerSide } from "@spt-aki/models/enums/EPlayerSide";
+import { ESpawnCategory } from "@spt-aki/models/enums/ESpawnCategory";
 
 /** === Types === */
-type Side = "Savage" | "Usec" | "Bear";
-type Category = "Player" | "Bot" | "Coop" | "Group" | "Opposite";
+export type Side = EPlayerSide;
+type Category = ESpawnCategory;
 
 /** === Constants === */
 const DEFAULT_RADIUS = config.spawnRadius ?? 20;
@@ -92,10 +93,6 @@ function createSpawnPoint(
     };
 }
 
-function getRandomPmcSide(): Side {
-    return Math.random() > 0.5 ? "Usec" : "Bear";
-}
-
 export const AddCustomBotSpawnPoints = (spawnParams: ISpawnPointParam[], map: keyof typeof ScavSpawns): ISpawnPointParam[] => {
     const custom = ScavSpawns[map];
     if (!custom?.length) {
@@ -104,7 +101,7 @@ export const AddCustomBotSpawnPoints = (spawnParams: ISpawnPointParam[], map: ke
     }
 
     const newSpawns = custom.map((coords) =>
-        createSpawnPoint(safeIxyz(coords), getClosestZone(spawnParams, coords.x, coords.y, coords.z), ["Bot"], ["Savage"])
+        createSpawnPoint(safeIxyz(coords), getClosestZone(spawnParams, coords.x, coords.y, coords.z), [ESpawnCategory.Bot], [EPlayerSide.Savage])
     );
 
     return [...spawnParams, ...newSpawns];
@@ -117,13 +114,12 @@ export const AddCustomPmcSpawnPoints = (spawnParams: ISpawnPointParam[], map: ke
         return spawnParams;
     }
 
-    const coopZone = `coop_group_zone_${map}`;
     const newSpawns = custom.map((coords: Ixyz, index: number) =>
         createSpawnPoint(
             safeIxyz(coords),
-            `${coopZone}_${index}`,
-            ["Coop", Math.random() > 0.5 ? "Group" : "Opposite"],
-            [getRandomPmcSide()],
+            `coop_pmc_zone_${map}_${index}`,
+            [ESpawnCategory.Coop],
+            [EPlayerSide.Usec, EPlayerSide.Bear],
             DEFAULT_RADIUS,
             2000 + index
         )
@@ -141,30 +137,38 @@ export const AddCustomSniperSpawnPoints = (spawnParams: ISpawnPointParam[], map:
 
     const newSpawns = custom.map((coords, i: number) => {
         const zone = getClosestZone(spawnParams, coords.x, coords.y, coords.z);
-        return createSpawnPoint(safeIxyz(coords), zone || `custom_snipe_${i}`, ["Bot"], ["Savage"]);
+        return createSpawnPoint(safeIxyz(coords), zone || `custom_snipe_${i}`, [ESpawnCategory.Bot], [EPlayerSide.Savage]);
     });
 
     return [...spawnParams, ...newSpawns];
 };
 
-export const BuildCustomPlayerSpawnPoints = (spawnParams: ISpawnPointParam[], map: keyof typeof PlayerSpawns): ISpawnPointParam[] => {
+export const BuildCustomPlayerSpawnPoints = (
+    spawnParams: ISpawnPointParam[],
+    map: keyof typeof PlayerSpawns
+): ISpawnPointParam[] => {
     const custom = PlayerSpawns[map];
-    const existing = spawnParams.filter(p => p.Categories?.includes("Player") && p.Infiltration);
+    const existing = spawnParams.filter(p => p.Categories?.includes(ESpawnCategory.Player) && p.Infiltration);
 
     if (!custom?.length) {
         if (config.debug) console.warn(`[MOAR] No custom Player spawns for ${map}`);
         return existing;
     }
 
-    const baseZone = `coop_player_group_${FikaBackendUtils.GroupId || "nogroup"}`;
-    const playerSide: Side = FikaBackendUtils.Profile?.Info?.Side === 1 ? "Usec" : "Bear";
-
+    const groupZone = `coop_player_group_all`; // All players grouped
     const newSpawns = custom.map((coords, index: number) =>
-        createSpawnPoint(safeIxyz(coords), `${baseZone}_${index}`, ["Player"], [playerSide], 1, 1000 + index)
+        createSpawnPoint(
+            safeIxyz(coords),
+            `${groupZone}_${index}`,
+            [ESpawnCategory.Player],
+            [EPlayerSide.Usec, EPlayerSide.Bear],
+            1,
+            1000 + index
+        )
     );
 
     if (config.debug) {
-        console.log(`[MOAR] Injected ${newSpawns.length} Coop player spawns into ${map} for group ${FikaBackendUtils.GroupId}`);
+        console.log(`[MOAR] Injected ${newSpawns.length} universal Coop player spawns into ${map}`);
     }
 
     return [...existing, ...newSpawns];
@@ -175,7 +179,7 @@ export function cleanClosest(spawns: ISpawnPointParam[], mapIndex: number, keepP
     const thresholdSq = Math.pow(5 + mapIndex * 0.5, 2);
 
     for (const spawn of spawns) {
-        if (keepPlayers && spawn.Categories?.includes("Player")) {
+        if (keepPlayers && spawn.Categories?.includes(ESpawnCategory.Player)) {
             filtered.push(spawn);
             continue;
         }

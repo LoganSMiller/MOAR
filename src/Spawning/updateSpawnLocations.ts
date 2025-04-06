@@ -5,6 +5,7 @@ import { getRandomInArray } from "../utils";
 import globalValues from "../GlobalValues";
 import getSortedSpawnPointList from "./spawnZoneUtils";
 import type { MOARConfig } from "../types";
+import { EPlayerSide } from "@spt-aki/models/enums/EPlayerSide";
 
 /**
  * Updates spawn zones to favor player-centric clustering.
@@ -32,7 +33,9 @@ export default function updateSpawnLocations(
         }
 
         const playerSpawns = mapSpawns.filter(spawn =>
-            spawn.type === "player" && spawn.Position && typeof spawn.Position.x === "number"
+            spawn.Categories?.includes("Player") &&
+            spawn.Sides?.some((side: EPlayerSide) => side === EPlayerSide.Usec || side === EPlayerSide.Bear) &&
+            spawn.Position
         );
 
         if (playerSpawns.length === 0) {
@@ -58,7 +61,13 @@ export default function updateSpawnLocations(
         const clusteredPlayerSpawns: ISpawnPointParam[] = [];
 
         for (const spawn of sortedSpawns) {
-            if (spawn.type !== "player" || !spawn.Position) continue;
+            if (
+                !spawn.Categories?.includes("Player") ||
+                !spawn.Sides?.some((side: EPlayerSide) => side === EPlayerSide.Usec || side === EPlayerSide.Bear) ||
+                !spawn.Position
+            ) {
+                continue;
+            }
 
             const dx = spawn.Position.x - x;
             const dy = spawn.Position.y - y;
@@ -70,7 +79,10 @@ export default function updateSpawnLocations(
             }
         }
 
-        const nonPlayerSpawns = sortedSpawns.filter(spawn => spawn.type !== "player");
+        const nonPlayerSpawns = sortedSpawns.filter(spawn =>
+            !spawn.Categories?.includes("Player") ||
+            !spawn.Sides?.some((side: EPlayerSide) => side === EPlayerSide.Usec || side === EPlayerSide.Bear)
+        );
 
         locationList[index].base.SpawnPointParams = [
             ...clusteredPlayerSpawns,

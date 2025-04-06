@@ -1,47 +1,44 @@
 import { ILogger } from "@spt/models/spt/utils/ILogger";
 import { DependencyContainer } from "tsyringe";
-import config from "../../config/config.json";
+import baseConfig from "../../config/config.json";
 import presets from "../../config/Presets.json";
 import presetWeightings from "../../config/PresetWeightings.json";
 
 /**
- * Validates consistency between preset files:
- * - Ensures every preset in PresetWeightings.json exists in Presets.json
- * - Ensures every preset key is valid against config.json
- *
- * Logs validation issues to the server logger.
+ * Validates MOAR's preset system:
+ * - Every preset in PresetWeightings.json exists in Presets.json
+ * - Every preset key maps to a valid config field or is a known metadata field
+ * 
+ * Logs all validation issues clearly to the server console.
  */
 export default function checkPresetLogic(container: DependencyContainer): void {
     const logger = container.resolve<ILogger>("WinstonLogger");
 
     logger.info("[MOAR]: 🔍 Validating preset config integrity...");
 
-    // Preset metadata keys allowed to exist in presets but not in base config
     const allowedPresetMetadata = new Set(["label", "description", "enabled"]);
-
-    // Track if any issues were found
     let hasIssues = false;
 
-    //  1. Check: All presets in PresetWeightings exist in Presets.json
-    for (const presetName of Object.keys(presetWeightings)) {
-        if (!(presetName in presets)) {
-            logger.error(`[MOAR]: ❌ Preset "${presetName}" missing in Presets.json (referenced in PresetWeightings.json)`);
+    // === Step 1: Ensure all weightings map to valid preset names ===
+    for (const name of Object.keys(presetWeightings)) {
+        if (!(name in presets)) {
+            logger.error(`[MOAR]: ❌ Preset "${name}" is missing in Presets.json (but present in PresetWeightings.json)`);
             hasIssues = true;
         }
     }
 
-    //  2. Check: All keys inside each preset are valid config fields (or metadata)
-    for (const [presetName, presetData] of Object.entries(presets)) {
-        if (!presetData || typeof presetData !== "object") {
-            logger.error(`[MOAR]: ❌ Preset "${presetName}" is malformed or not an object.`);
+    // === Step 2: Ensure all keys in Presets.json are valid config fields or known metadata ===
+    for (const [presetName, presetValues] of Object.entries(presets)) {
+        if (!presetValues || typeof presetValues !== "object") {
+            logger.error(`[MOAR]: ❌ Preset "${presetName}" is not a valid object.`);
             hasIssues = true;
             continue;
         }
 
-        for (const key of Object.keys(presetData)) {
+        for (const key of Object.keys(presetValues)) {
             if (allowedPresetMetadata.has(key)) continue;
-            if (!(key in config)) {
-                logger.error(`[MOAR]: ❌ Invalid key "${key}" in preset "${presetName}" (not found in config.json)`);
+            if (!(key in baseConfig)) {
+                logger.error(`[MOAR]: ❌ Invalid key "${key}" in preset "${presetName}" — not found in config.json.`);
                 hasIssues = true;
             }
         }
@@ -50,6 +47,6 @@ export default function checkPresetLogic(container: DependencyContainer): void {
     if (!hasIssues) {
         logger.info("[MOAR]: ✅ Preset validation passed with no errors.");
     } else {
-        logger.warn("[MOAR]: ⚠️ Preset validation completed with issues. Check log above.");
+        logger.warn("[MOAR]: ⚠️ Preset validation completed with issues. Review log above.");
     }
 }

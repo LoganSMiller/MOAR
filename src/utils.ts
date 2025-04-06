@@ -1,10 +1,11 @@
+import fs from "fs";
+import path from "path";
+
 import { ILogger } from "@spt/models/spt/utils/ILogger";
 import { ILocation } from "@spt/models/eft/common/ILocation";
 import { IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
-import globalValues from "./GlobalValues";
 
-import fs from "fs";
-import path from "path";
+import globalValues from "./GlobalValues";
 import { MOARConfig, MapSettings } from "./types";
 
 // Paths to configs
@@ -14,7 +15,7 @@ const mapConfigPath = path.resolve(__dirname, "../config/mapConfig.json");
 // Safe JSON loading
 function loadJSON<T = Record<string, unknown>>(filePath: string, label: string): T {
     if (!fs.existsSync(filePath)) {
-        console.error(`[MOAR]  ${label} file not found at: ${filePath}`);
+        console.error(`[MOAR] ❌ ${label} file not found at: ${filePath}`);
         return {} as T;
     }
 
@@ -23,7 +24,7 @@ function loadJSON<T = Record<string, unknown>>(filePath: string, label: string):
         return JSON.parse(raw);
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`[MOAR]  Failed to parse ${label}:`, message);
+        console.error(`[MOAR] ❌ Failed to parse ${label}:`, message);
         return {} as T;
     }
 }
@@ -36,18 +37,18 @@ const mapConfig: Record<string, MapSettings> = loadJSON<Record<string, MapSettin
  * Converts a kebab-case string to Title Case.
  */
 export function kebabToTitle(text: string): string {
-    return text.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+    return text.replace(/-/g, " ").replace(/\b\w/g, char => char.toUpperCase());
 }
 
 /**
- * Deep clone for simple serializable objects.
+ * Deep clone for serializable objects.
  */
 export function cloneDeep<T>(value: T): T {
     return JSON.parse(JSON.stringify(value));
 }
 
 /**
- * Fisher-Yates shuffle.
+ * Full shuffle using Fisher-Yates.
  */
 export function shuffle<T>(array: T[]): T[] {
     const arr = [...array];
@@ -79,14 +80,14 @@ export function getRandomInArray<T>(arr: T[]): T {
 }
 
 /**
- * Returns the active or fallback config.
+ * Returns the current preset or fallback config.
  */
 export function getRandomPresetOrCurrentlySelectedPreset(): MOARConfig {
     return config;
 }
 
 /**
- * Saves any object to disk as a JSON debug file.
+ * Saves any object to disk as a debug JSON file.
  */
 export function saveToFile(filename: string, value: unknown): void {
     try {
@@ -110,12 +111,12 @@ export function saveToFile(filename: string, value: unknown): void {
 
         fs.writeFileSync(fullPath, safeString);
     } catch (err) {
-        console.warn(`[MOAR]  Failed to stringify or save debug file: ${filename}`, err);
+        console.warn(`[MOAR] ⚠ Failed to stringify or save debug file: ${filename}`, err);
     }
 }
 
 /**
- * Applies spawn smoothing to all wave times in all maps.
+ * Applies spawn smoothing to all boss wave times.
  */
 export function enforceSmoothing(
     locationList: ILocation[],
@@ -137,13 +138,13 @@ export function enforceSmoothing(
         }
 
         if (config.debug?.enabled) {
-            logger.info(`[MOAR]  Smoothed waves on ${location.base?.Id}.`);
+            logger.info(`[MOAR] ✅ Smoothed waves on ${location.base?.Id}`);
         }
     }
 }
 
 /**
- * Sets EscapeTimeLimit for each map using map overrides.
+ * Sets EscapeTimeLimit per map, using fallback if needed.
  */
 export function setEscapeTimeOverrides(
     locations: ILocation[],
@@ -158,44 +159,45 @@ export function setEscapeTimeOverrides(
         const mapSettings = mapOverrides[mapId];
         const overrideTime = mapSettings?.escapeTimeOverride;
 
-        if (typeof overrideTime === "number") {
-            loc.base.EscapeTimeLimit = overrideTime;
-        } else {
-            loc.base.EscapeTimeLimit = fallbackTime;
-            logger.warning(`[MOAR]  No escapeTimeOverride for ${mapId}, using fallback ${fallbackTime} minutes.`);
+        loc.base.EscapeTimeLimit = typeof overrideTime === "number"
+            ? overrideTime
+            : fallbackTime;
+
+        if (typeof overrideTime !== "number") {
+            logger.warning(`[MOAR] ⏱ No escapeTimeOverride for ${mapId}, using fallback ${fallbackTime} min.`);
         }
 
         if (activeConfig.debug?.enabled) {
-            logger.info(`[MOAR]  ${mapId} escape time set to ${loc.base.EscapeTimeLimit} min`);
+            logger.info(`[MOAR] ⏱ ${mapId} escape time set to ${loc.base.EscapeTimeLimit} min`);
         }
     }
 }
 
 /**
- * Validates whether maps and spawn data are ready to be used for spawning.
+ * Validates that spawn setup can continue safely.
  */
 export function validateWaveBuildSanity(
     locations: ILocation[],
     logger: ILogger
 ): boolean {
     if (!globalValues.indexedMapSpawns || Object.keys(globalValues.indexedMapSpawns).length === 0) {
-        logger.error("[MOAR]  indexedMapSpawns is missing or empty.");
+        logger.error("[MOAR] ❌ indexedMapSpawns is missing or empty.");
         return false;
     }
 
     if (!globalValues.playerSpawn || !globalValues.playerSpawn.Position) {
-        logger.error("[MOAR]  globalValues.playerSpawn is not set.");
+        logger.error("[MOAR] ❌ globalValues.playerSpawn is not set.");
         return false;
     }
 
     for (const loc of locations) {
         if (!loc?.base) {
-            logger.error("[MOAR]  One of the locations is missing its .base property.");
+            logger.error("[MOAR] ❌ One of the locations is missing its .base property.");
             return false;
         }
 
         if (typeof loc.base.EscapeTimeLimit !== "number") {
-            logger.error(`[MOAR]  ${loc.base.Id} is missing a valid EscapeTimeLimit.`);
+            logger.error(`[MOAR] ❌ ${loc.base.Id} is missing a valid EscapeTimeLimit.`);
             return false;
         }
     }
