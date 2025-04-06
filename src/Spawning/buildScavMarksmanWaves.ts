@@ -2,16 +2,13 @@ import { ILocation } from "@spt/models/eft/common/ILocation";
 import { WildSpawnType, ISpawnPointParam, IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
 
 import mapConfig from "../../config/mapConfig.json";
-import { defaultEscapeTimes, defaultHostility } from "./constants";
+import { defaultEscapeTimes, defaultHostility, validTemplates } from "./constants";
 import { looselyShuffle, shuffle } from "../utils";
 import { MapSettings, MOARConfig } from "../types";
 import { buildBotWaves } from "../spawnUtils";
 import getSortedSpawnPointList from "./spawnZoneUtils";
 import globalValues from "../GlobalValues";
 
-/**
- * Builds Scav and Marksman bot waves for each map using map-specific settings.
- */
 export default function buildScavMarksmanWaves(
     config: MOARConfig,
     locationList: ILocation[]
@@ -22,7 +19,6 @@ export default function buildScavMarksmanWaves(
         const map = mapSettingsList[index];
         const mapSettings: MapSettings = mapConfig[map];
 
-        // Ensure we have spawn data for this map
         globalValues.indexedMapSpawns ??= {};
         if (!globalValues.indexedMapSpawns[map]) {
             globalValues.indexedMapSpawns[map] = [];
@@ -42,7 +38,6 @@ export default function buildScavMarksmanWaves(
 
         const { x, y, z } = globalValues.playerSpawn?.Position ?? { x: 0, y: 0, z: 0 };
 
-        // Fetch valid scav/sniper zone names
         let scavZones = getSortedSpawnPointList(
             locationList[index].base.SpawnPointParams.filter((p: ISpawnPointParam) => p.type === "scav"),
             x, y, z
@@ -73,6 +68,9 @@ export default function buildScavMarksmanWaves(
 
         const timeLimit = (typeof escapeLimit === "number" && !isNaN(escapeLimit) ? escapeLimit : baseEscapeTime) * 60;
 
+        const assaultTemplate = validTemplates.includes(WildSpawnType.ASSAULT) ? WildSpawnType.ASSAULT : "assault";
+        const marksmanTemplate = validTemplates.includes(WildSpawnType.MARKSMAN) ? WildSpawnType.MARKSMAN : "marksman";
+
         const scavWaves: IBossLocationSpawn[] = buildBotWaves({
             count: totalScavWaves,
             timeLimit,
@@ -80,7 +78,7 @@ export default function buildScavMarksmanWaves(
             groupChance: config.scavGroupChance,
             zones: config.randomSpawns ? shuffle(scavZones) : scavZones,
             difficulty: config.scavDifficulty.toString(),
-            template: WildSpawnType.ASSAULT,
+            template: assaultTemplate,
             forceSpawn: false,
             distribution: config.scavWaveDistribution === 1 ? "random" : "even",
             initialOffset: initialSpawnDelay + Math.round(Math.random() * 10),
@@ -94,7 +92,7 @@ export default function buildScavMarksmanWaves(
             groupChance: config.sniperGroupChance,
             zones: sniperZones,
             difficulty: config.scavDifficulty.toString(),
-            template: WildSpawnType.MARKSMAN,
+            template: marksmanTemplate,
             forceSpawn: false,
             distribution: "even",
             initialOffset: initialSpawnDelay + 15,
@@ -103,7 +101,6 @@ export default function buildScavMarksmanWaves(
 
         const allScavs: IBossLocationSpawn[] = [...scavWaves, ...sniperWaves];
 
-        // Randomly assign hot zones to some waves
         if (allScavs.length && scavHotZones.length) {
             for (const zone of scavHotZones) {
                 const targetIndex = Math.floor(Math.random() * allScavs.length);
@@ -113,7 +110,6 @@ export default function buildScavMarksmanWaves(
             }
         }
 
-        // Merge into boss spawn list while deduplicating
         const seen = new Set<string>();
         const existing = locationList[index].base.BossLocationSpawn ?? [];
 

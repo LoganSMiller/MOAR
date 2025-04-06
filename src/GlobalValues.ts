@@ -1,13 +1,14 @@
 import { ILocationBase, ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
 import fs from "fs";
 import path from "path";
-import { MOARConfig } from "./types"; 
+import { MOARConfig } from "./types";
 
-// === Constants ===
 const CONFIG_PATH = path.resolve(__dirname, "../config/config.json");
 const DEBUG = true;
 
-// === Type-safe JSON loader ===
+/**
+ * Safe JSON config loader with fallback logging.
+ */
 function loadJSONFile<T = unknown>(filePath: string): T | null {
     if (!fs.existsSync(filePath)) {
         console.warn("[MOAR] Config file does not exist at:", filePath);
@@ -24,7 +25,7 @@ function loadJSONFile<T = unknown>(filePath: string): T | null {
     }
 }
 
-// === Load Initial Config ===
+// === Initial Config Load ===
 const loadedConfig = loadJSONFile<MOARConfig>(CONFIG_PATH);
 
 if (!loadedConfig) {
@@ -36,7 +37,7 @@ if (DEBUG) {
     console.log("[MOAR] Loaded default preset:", loadedConfig.defaultPreset);
 }
 
-// === Global Type ===
+// === Global Interface ===
 export interface GlobalValuesType {
     baseConfig: MOARConfig;
     overrideConfig: Partial<MOARConfig>;

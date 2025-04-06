@@ -7,10 +7,8 @@ import { ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
 
 const LOG_PREFIX = "[MOAR:SpawnData]";
 
-/** Supported bot spawn types */
 export type BotSpawnType = "player" | "scav" | "sniper" | "pmc";
 
-/** Internal registry for all spawn types and their map spawn points */
 const spawnRegistry: Record<BotSpawnType, Record<string, ISpawnPointParam[]>> = {
     player: playerSpawns,
     scav: scavSpawns,
@@ -18,10 +16,6 @@ const spawnRegistry: Record<BotSpawnType, Record<string, ISpawnPointParam[]>> = 
     pmc: pmcSpawns
 };
 
-/**
- * Get spawns for a specific bot type (case-insensitive).
- * Returns an empty object if not a recognized type.
- */
 export function getSpawnData(type: string): Record<string, ISpawnPointParam[]> {
     const normalized = type.toLowerCase() as BotSpawnType;
 
@@ -33,9 +27,6 @@ export function getSpawnData(type: string): Record<string, ISpawnPointParam[]> {
     return {};
 }
 
-/**
- * Flatten all spawn points across all types and maps.
- */
 export function getAllSpawnData(): ISpawnPointParam[] {
     return Object.values(spawnRegistry).flatMap(typeMap => {
         return Object.values(typeMap).flat().filter(spawn => {
@@ -44,10 +35,6 @@ export function getAllSpawnData(): ISpawnPointParam[] {
     });
 }
 
-/**
- * Validates presence of required fields in every spawn entry.
- * Logs specific errors if validation fails.
- */
 export function validateSpawns(): boolean {
     let isValid = true;
     const requiredFields: (keyof ISpawnPointParam)[] = ["BotZoneName", "Position"];
@@ -76,9 +63,6 @@ export function validateSpawns(): boolean {
     return isValid;
 }
 
-/**
- * Returns a summary of total spawn counts by bot type.
- */
 export function getSpawnSummary(): Record<BotSpawnType, number> {
     return {
         player: Object.values(spawnRegistry.player).flat().length,

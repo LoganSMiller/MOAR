@@ -50,7 +50,6 @@ export default function updateSpawnLocations(
             continue;
         }
 
-        // Assign selected player spawn — only once and safely
         if (!globalValues.playerSpawn || !globalValues.playerSpawn.Position) {
             globalValues.playerSpawn = selected;
         }
@@ -75,12 +74,10 @@ export default function updateSpawnLocations(
 
         const nonPlayerSpawns = sortedSpawns.filter(spawn => spawn.type !== "player");
 
-        // Defensive: Ensure structure exists before writing
         if (!locationList[index]?.base?.SpawnPointParams) {
             locationList[index].base.SpawnPointParams = [];
         }
 
-        // Overwrite the spawn list with updated clustering
         locationList[index].base.SpawnPointParams = [
             ...clusteredPlayerSpawns,
             ...nonPlayerSpawns

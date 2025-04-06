@@ -2,16 +2,13 @@ import { ILocation } from "@spt/models/eft/common/ILocation";
 import { WildSpawnType, ISpawnPointParam, IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
 
 import mapConfig from "../../config/mapConfig.json";
-import { defaultEscapeTimes, defaultHostility } from "./constants";
+import { defaultEscapeTimes, defaultHostility, validTemplates } from "./constants";
 import { looselyShuffle, shuffle } from "../utils";
 import { MapSettings, MOARConfig } from "../types";
 import { buildBotWaves } from "../spawnUtils";
 import getSortedSpawnPointList from "./spawnZoneUtils";
 import globalValues from "../GlobalValues";
 
-/**
- * Builds PMC bot waves for each map using map-specific settings.
- */
 export default function buildPmcs(
     config: MOARConfig,
     locationList: ILocation[]
@@ -55,7 +52,6 @@ export default function buildPmcs(
 
         const { x, y, z } = globalValues.playerSpawn?.Position ?? { x: 0, y: 0, z: 0 };
 
-        // Zone collection
         let pmcZones: string[] = [];
 
         if (globalValues.coopSpawnZone) {
@@ -89,7 +85,6 @@ export default function buildPmcs(
             totalWaves += pmcHotZones.length;
         }
 
-        // Duplicate zones to meet wave demand
         while (totalWaves > pmcZones.length) {
             pmcZones = pmcZones.length === 0 ? ["fallback_zone"] : [...pmcZones, ...pmcZones];
         }
@@ -109,6 +104,9 @@ export default function buildPmcs(
         const initialOffsetUsec = initialSpawnDelay + Math.round(Math.random() * 10);
         const initialOffsetBear = initialSpawnDelay + Math.round(Math.random() * 10);
 
+        const usecTemplate = validTemplates.includes(WildSpawnType.USEC) ? WildSpawnType.USEC : "usec";
+        const bearTemplate = validTemplates.includes(WildSpawnType.BEAR) ? WildSpawnType.BEAR : "bear";
+
         const usecWaves = buildBotWaves({
             count: half,
             timeLimit,
@@ -116,7 +114,7 @@ export default function buildPmcs(
             groupChance: config.pmcGroupChance,
             zones: usecZones,
             difficulty: config.pmcDifficulty.toString(),
-            template: WildSpawnType.USEC,
+            template: usecTemplate,
             forceSpawn: false,
             distribution: waveDistribution,
             initialOffset: initialOffsetUsec
@@ -129,7 +127,7 @@ export default function buildPmcs(
             groupChance: config.pmcGroupChance,
             zones: bearZones,
             difficulty: config.pmcDifficulty.toString(),
-            template: WildSpawnType.BEAR,
+            template: bearTemplate,
             forceSpawn: false,
             distribution: waveDistribution,
             initialOffset: initialOffsetBear
@@ -137,7 +135,6 @@ export default function buildPmcs(
 
         const allPmcs: IBossLocationSpawn[] = [...usecWaves, ...bearWaves];
 
-        // Apply hotzones to existing waves
         if (allPmcs.length && pmcHotZones.length) {
             for (const zone of pmcHotZones) {
                 const targetIndex = Math.floor(Math.random() * allPmcs.length);
@@ -147,7 +144,6 @@ export default function buildPmcs(
             }
         }
 
-        // Final safety/consistency pass
         for (const wave of allPmcs) {
             wave.Time = typeof wave.Time === "number" && !isNaN(wave.Time) ? wave.Time : 0;
             wave.BossChance = Math.max(1, Math.min(100, wave.BossChance || 100));

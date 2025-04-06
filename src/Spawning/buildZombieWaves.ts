@@ -3,7 +3,7 @@ import { WildSpawnType } from "@spt/models/eft/common/ILocationBase";
 import { IBots } from "@spt/models/spt/bots/IBots";
 
 import mapConfig from "../../config/mapConfig.json";
-import { configLocations, defaultEscapeTimes } from "./constants";
+import { configLocations, defaultEscapeTimes, validTemplates } from "./constants";
 import { buildZombie, getHealthBodyPartsByPercentage, zombieTypes } from "../spawnUtils";
 import { MapSettings, MOARConfig } from "../types";
 
@@ -24,7 +24,6 @@ export function buildZombieWaves(
 
     const zombieBodyParts = getHealthBodyPartsByPercentage(zombieHealth);
 
-    //  Patch zombie health templates safely
     for (const type of zombieTypes) {
         const template = bots.types?.[type];
         const health = template?.health?.BodyParts;
@@ -67,11 +66,14 @@ export function buildZombieWaves(
         const timeLimit = escapeTime * 60;
         const distribution = zombieWaveDistribution === 1 ? "random" : "even";
 
+        const zombieTemplate = validTemplates.includes("zombie") ? "zombie" : WildSpawnType.CRAZY_ASSAULT;
+
         const zombieWaves = buildZombie(
             totalWaves,
             timeLimit,
             distribution,
-            9999 // Use high bot cap to prevent issues on high-density maps
+            9999,
+            zombieTemplate
         );
 
         if (debug?.enabled) {
@@ -81,7 +83,6 @@ export function buildZombieWaves(
         const existing = location.BossLocationSpawn ?? [];
         const seen = new Set<string>();
 
-        //  Merge and deduplicate by BossName-Zone-Time
         location.BossLocationSpawn = [...existing, ...zombieWaves].filter(wave => {
             wave.Time = typeof wave.Time === "number" && !isNaN(wave.Time) ? wave.Time : 0;
             const key = `${wave.BossName}-${wave.BossZone}-${wave.Time}`;

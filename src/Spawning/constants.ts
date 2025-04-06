@@ -1,10 +1,6 @@
 import { IBotType } from "@spt/models/eft/common/tables/IBotType";
 import { BossPerformanceOverride } from "../types";
 
-/**
- * Hostility configuration between PMC factions and AI groups.
- * Forces PMCs to treat other AI and player factions as enemies.
- */
 export const defaultHostility: IBotType["defaultSettings"]["BotHostility"] = [
     {
         BotRole: "pmcBEAR",
@@ -60,7 +56,6 @@ export const defaultHostility: IBotType["defaultSettings"]["BotHostility"] = [
     }
 ];
 
-/** Config map keys used across config.json and mapConfig.json */
 export const configLocations = [
     "customs", "factoryDay", "factoryNight", "interchange", "laboratory",
     "lighthouse", "rezervbase", "shoreline", "tarkovstreets", "woods", "gzLow", "gzHigh"
@@ -68,25 +63,21 @@ export const configLocations = [
 
 export type ConfigMapName = typeof configLocations[number];
 
-/** Tarkov's internal location IDs used in location files */
 export const originalMapList = [
     "bigmap", "factory4_day", "factory4_night", "interchange", "laboratory",
     "lighthouse", "rezervbase", "shoreline", "tarkovstreets", "woods", "sandbox", "sandbox_high"
 ] as const;
 
-/** Bot types excluded from boss pool logic */
 export const bossesToRemoveFromPool: Set<string> = new Set([
     "assault", "pmcBEAR", "pmcUSEC",
     "infectedAssault", "infectedTagilla", "infectedLaborant", "infectedCivil"
 ]);
 
-/** All main boss types used for spawn logic */
 export const mainBossNameList = [
     "bossKojaniy", "bossGluhar", "bossSanitar", "bossKilla", "bossTagilla",
     "bossKnight", "bossBoar", "bossKolontay", "bossPartisan", "bossBully"
 ] as const;
 
-/** Default map escape durations in minutes */
 export const defaultEscapeTimes: Record<ConfigMapName, number> = {
     customs: 40,
     factoryDay: 20,
@@ -102,7 +93,6 @@ export const defaultEscapeTimes: Record<ConfigMapName, number> = {
     gzHigh: 35
 };
 
-/** Optional tuning overrides for individual boss types */
 export const bossPerformanceHash: Record<string, BossPerformanceOverride> = {
     bossZryachiy: { BossChance: 50, BossEscortAmount: "0" },
     exUsec:       { BossChance: 35, BossEscortAmount: "1" },
@@ -126,3 +116,14 @@ export const bossPerformanceHash: Record<string, BossPerformanceOverride> = {
         BossEscortAmount: "2,2,3,3,3,4"
     }
 };
+
+export const validBosses = [
+    "bossKojaniy", "bossGluhar", "bossSanitar", "bossKilla", "bossTagilla", "bossKnight", "bossBoar",
+    "bossKolontay", "bossPartisan", "bossBully", "bossZryachiy", "exUsec", "pmcBot", "pmcBEAR", "pmcUSEC",
+    "assault", "marksman", "zombie"
+];
+
+export const validTemplates = [
+    "normal", "hard", "impossible", "easy", "assault", "marksman", "zombie",
+    "pmcBot", "exUsec", "pmcBEAR", "pmcUSEC", "usec", "bear"
+];

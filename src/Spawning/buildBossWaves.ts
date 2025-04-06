@@ -9,7 +9,9 @@ import {
     bossesToRemoveFromPool,
     bossPerformanceHash,
     configLocations,
-    mainBossNameList
+    mainBossNameList,
+    validBosses,
+    validTemplates
 } from "./constants";
 
 import { buildBossBasedWave } from "../spawnUtils";
@@ -73,13 +75,23 @@ export function buildBossWaves(
 
         if (randomRaiderGroup) {
             spawnList.push(buildBossBasedWave(
-                randomRaiderGroupChance, "1,2,2,2,3", "pmcBot", "pmcBot", "", location.base.EscapeTimeLimit
+                randomRaiderGroupChance,
+                "1,2,2,2,3",
+                validBosses.includes("pmcBot") ? "pmcBot" : validBosses[0],
+                validTemplates.includes("pmcBot") ? "pmcBot" : "normal",
+                "",
+                location.base.EscapeTimeLimit
             ));
         }
 
         if (randomRogueGroup) {
             spawnList.push(buildBossBasedWave(
-                randomRogueGroupChance, "1,2,2,2,3", "exUsec", "exUsec", "", location.base.EscapeTimeLimit
+                randomRogueGroupChance,
+                "1,2,2,2,3",
+                validBosses.includes("exUsec") ? "exUsec" : validBosses[0],
+                validTemplates.includes("exUsec") ? "exUsec" : "normal",
+                "",
+                location.base.EscapeTimeLimit
             ));
         }
 

@@ -13,8 +13,8 @@ export interface MOARConfig {
     smoothingDistribution: number;
     spawnMinDistance: number;
     spawnMaxDistance: number;
-    spawnRadius: number;         // Default spawn sphere radius (optional override)
-    spawnDelay: number;          // Delay before spawns activate (seconds)
+    spawnRadius: number;
+    spawnDelay: number;
 
     // === Difficulty tuning ===
     pmcDifficulty: number;

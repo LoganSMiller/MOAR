@@ -5,12 +5,12 @@ import { Ixyz } from "../Models/Ixyz";
 const SPAWN_DIR = path.resolve(__dirname, "../../config/Spawns");
 const LOG_PREFIX = "[MOAR:SpawnUtils]";
 const DELETE_DISTANCE_THRESHOLD = 15;
-const DEBUG = false; // Set to true for debugging logs
+const DEBUG = false;
 
 export type BotSpawnType = "player" | "pmc" | "scav" | "sniper";
 
 /**
- * Type-safe JSON file update utility.
+ * Generic JSON updater with error handling and type safety.
  */
 export const updateJsonFile = <T>(
     filePath: string,
@@ -32,7 +32,7 @@ export const updateJsonFile = <T>(
 };
 
 /**
- * Append a spawn to the correct file for the given type and map.
+ * Adds a new spawn to a map's JSON config, ensuring y-offset for ground safety.
  */
 export const updateBotSpawn = (
     map: string,
@@ -43,14 +43,14 @@ export const updateBotSpawn = (
     const key = map.toLowerCase();
 
     updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
-        value.y += 0.5; // Offset Y to prevent ground clipping
+        value.y += 0.5;
         jsonData[key] ??= [];
         jsonData[key].push(value);
     }, `Added ${type} spawn to '${map}'`);
 };
 
 /**
- * Delete the closest spawn to a given point within a distance threshold.
+ * Deletes the nearest spawn within DELETE_DISTANCE_THRESHOLD.
  */
 export const deleteBotSpawn = (
     map: string,
@@ -89,7 +89,7 @@ export const deleteBotSpawn = (
 };
 
 /**
- * Deduplicates spawn entries by approximate position hash.
+ * Removes duplicates from a set of Ixyz entries using rounded precision.
  */
 function dedupeIxyzArray(points: Ixyz[]): Ixyz[] {
     const seen = new Set<string>();
@@ -102,8 +102,7 @@ function dedupeIxyzArray(points: Ixyz[]): Ixyz[] {
 }
 
 /**
- * Replaces all spawn data for a type across all maps, safely deduplicating input.
- * Should only be used before the raid starts (never during active play).
+ * Replaces all spawn entries for a given type. Only use outside live raids.
  */
 export const updateAllBotSpawns = (
     values: Record<string, Ixyz[]>,
@@ -123,4 +122,3 @@ export const updateAllBotSpawns = (
         }
     }, `Overwrote all ${safeType} spawns (deduplicated)`);
 };
-
