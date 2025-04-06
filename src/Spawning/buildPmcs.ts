@@ -98,42 +98,42 @@ export default function buildPmcs(
         const half = Math.ceil(totalWaves / 2);
         const waveDistribution = config.pmcWaveDistribution === 1 ? "random" : "even";
 
-        const usecZones = pmcZones.filter((_, i) => i % 2 === 0);
-        const bearZones = pmcZones.filter((_, i) => i % 2 !== 0);
+        const UsecZones = pmcZones.filter((_, i) => i % 2 === 0);
+        const BearZones = pmcZones.filter((_, i) => i % 2 !== 0);
 
         const initialOffsetUsec = initialSpawnDelay + Math.round(Math.random() * 10);
         const initialOffsetBear = initialSpawnDelay + Math.round(Math.random() * 10);
 
-        const usecTemplate = validTemplates.includes(WildSpawnType.USEC) ? WildSpawnType.USEC : "usec";
-        const bearTemplate = validTemplates.includes(WildSpawnType.BEAR) ? WildSpawnType.BEAR : "bear";
+        const UsecTemplate = validTemplates.includes(WildSpawnType.Usec) ? WildSpawnType.Usec : "Usec";
+        const BearTemplate = validTemplates.includes(WildSpawnType.Bear) ? WildSpawnType.Bear : "Bear";
 
-        const usecWaves = buildBotWaves({
+        const UsecWaves = buildBotWaves({
             count: half,
             timeLimit,
             groupSize: config.pmcMaxGroupSize - 1,
             groupChance: config.pmcGroupChance,
-            zones: usecZones,
+            zones: UsecZones,
             difficulty: config.pmcDifficulty.toString(),
-            template: usecTemplate,
+            template: UsecTemplate,
             forceSpawn: false,
             distribution: waveDistribution,
             initialOffset: initialOffsetUsec
         }, locationList[index]);
 
-        const bearWaves = buildBotWaves({
+        const BearWaves = buildBotWaves({
             count: half,
             timeLimit,
             groupSize: config.pmcMaxGroupSize - 1,
             groupChance: config.pmcGroupChance,
-            zones: bearZones,
+            zones: BearZones,
             difficulty: config.pmcDifficulty.toString(),
-            template: bearTemplate,
+            template: BearTemplate,
             forceSpawn: false,
             distribution: waveDistribution,
             initialOffset: initialOffsetBear
         }, locationList[index]);
 
-        const allPmcs: IBossLocationSpawn[] = [...usecWaves, ...bearWaves];
+        const allPmcs: IBossLocationSpawn[] = [...UsecWaves, ...BearWaves];
 
         if (allPmcs.length && pmcHotZones.length) {
             for (const zone of pmcHotZones) {

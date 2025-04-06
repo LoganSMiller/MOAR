@@ -36,6 +36,7 @@ function loadConfig(): MOARConfig {
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         console.error("[MOAR]  Failed to parse config.json in mod.ts:", message);
+        console.warn("[MOAR] Falling back to default config due to parse error.");
         return getDefaultConfig();
     }
 }

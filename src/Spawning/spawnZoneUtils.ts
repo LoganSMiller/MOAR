@@ -8,9 +8,10 @@ import ScavSpawns from "../../config/Spawns/scavSpawns.json";
 import SniperSpawns from "../../config/Spawns/sniperSpawns.json";
 
 import crypto from "crypto";
+import { FikaBackendUtils } from "../../FIKA/FikaBackendUtils";
 
 /** === Types === */
-type Side = "Savage" | "Pmc";
+type Side = "Savage" | "Usec" | "Bear";
 type Category = "Player" | "Bot" | "Coop" | "Group" | "Opposite";
 
 /** === Constants === */
@@ -91,6 +92,10 @@ function createSpawnPoint(
     };
 }
 
+function getRandomPmcSide(): Side {
+    return Math.random() > 0.5 ? "Usec" : "Bear";
+}
+
 export const AddCustomBotSpawnPoints = (spawnParams: ISpawnPointParam[], map: keyof typeof ScavSpawns): ISpawnPointParam[] => {
     const custom = ScavSpawns[map];
     if (!custom?.length) {
@@ -112,8 +117,16 @@ export const AddCustomPmcSpawnPoints = (spawnParams: ISpawnPointParam[], map: ke
         return spawnParams;
     }
 
-    const newSpawns = custom.map((coords: Ixyz) =>
-        createSpawnPoint(safeIxyz(coords), getClosestZone(spawnParams, coords.x, coords.y, coords.z), ["Coop", Math.random() > 0.5 ? "Group" : "Opposite"], ["Pmc"])
+    const coopZone = `coop_group_zone_${map}`;
+    const newSpawns = custom.map((coords: Ixyz, index: number) =>
+        createSpawnPoint(
+            safeIxyz(coords),
+            `${coopZone}_${index}`,
+            ["Coop", Math.random() > 0.5 ? "Group" : "Opposite"],
+            [getRandomPmcSide()],
+            DEFAULT_RADIUS,
+            2000 + index
+        )
     );
 
     return [...spawnParams, ...newSpawns];
@@ -143,13 +156,15 @@ export const BuildCustomPlayerSpawnPoints = (spawnParams: ISpawnPointParam[], ma
         return existing;
     }
 
-    const baseZone = `coop_player_zone_${map}`;
+    const baseZone = `coop_player_group_${FikaBackendUtils.GroupId || "nogroup"}`;
+    const playerSide: Side = FikaBackendUtils.Profile?.Info?.Side === 1 ? "Usec" : "Bear";
+
     const newSpawns = custom.map((coords, index: number) =>
-        createSpawnPoint(safeIxyz(coords), `${baseZone}_${index}`, ["Player"], ["Pmc"], 1, 1000 + index)
+        createSpawnPoint(safeIxyz(coords), `${baseZone}_${index}`, ["Player"], [playerSide], 1, 1000 + index)
     );
 
     if (config.debug) {
-        console.log(`[MOAR] Injected ${newSpawns.length} Coop player spawns into ${map}`);
+        console.log(`[MOAR] Injected ${newSpawns.length} Coop player spawns into ${map} for group ${FikaBackendUtils.GroupId}`);
     }
 
     return [...existing, ...newSpawns];

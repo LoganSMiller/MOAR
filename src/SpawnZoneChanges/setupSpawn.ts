@@ -19,7 +19,8 @@ import {
     AddCustomSniperSpawnPoints,
     cleanClosest,
     getClosestZone,
-    removeClosestSpawnsFromCustomBots
+    removeClosestSpawnsFromCustomBots,
+    BuildCustomPlayerSpawnPoints
 } from "../Spawning/spawnZoneUtils";
 import { updateAllBotSpawns } from "./updateUtils";
 import { shuffle } from "../utils";
@@ -126,11 +127,7 @@ export const setupSpawns = (container: DependencyContainer): void => {
             SniperSpawns[map] = removeClosestSpawnsFromCustomBots(SniperSpawns, sniperSpawns, map, configKey);
         }
 
-        const playerSpawns: ISpawnPointParam[] = cleanClosest(
-            spawnParams.filter((p: ISpawnPointParam) => p.Categories?.includes("Player") && p.Infiltration),
-            mapIndex,
-            true
-        );
+        const playerSpawns = BuildCustomPlayerSpawnPoints(spawnParams, map);
 
         scavSpawns = cleanClosest(AddCustomBotSpawnPoints(scavSpawns, map), mapIndex).map((point) =>
             applyColliderRadiusClamp({
@@ -148,8 +145,8 @@ export const setupSpawns = (container: DependencyContainer): void => {
                 BotZoneName: isGZ
                     ? "ZoneSandbox"
                     : getClosestZone(scavSpawns, point.Position.x, point.Position.y, point.Position.z),
-                Categories: ["Coop", Math.random() > 0.5 ? "Group" : "Opposite"],
-                Sides: ["Pmc"],
+                Categories: ["Coop", "Group"],
+                Sides: ["Random"],
                 CorePointId: 0
             }, radiusLimit)
         );

@@ -3,7 +3,7 @@ import { BossPerformanceOverride } from "../types";
 
 export const defaultHostility: IBotType["defaultSettings"]["BotHostility"] = [
     {
-        BotRole: "pmcBEAR",
+        BotRole: "pmcBear",
         AlwaysEnemies: [
             "bossTest", "followerTest", "bossKilla", "bossKojaniy", "followerKojaniy",
             "cursedAssault", "bossGluhar", "followerGluharAssault", "followerGluharSecurity",
@@ -14,7 +14,7 @@ export const defaultHostility: IBotType["defaultSettings"]["BotHostility"] = [
             "bossBoarSniper", "crazyAssaultEvent", "sectactPriestEvent", "followerBoarClose1",
             "followerBoarClose2", "bossKolontay", "followerKolontayAssault", "followerKolontaySecurity",
             "bossPartisan", "spiritWinter", "spiritSpring", "peacemaker", "skier",
-            "assault", "marksman", "pmcUSEC", "exUsec", "pmcBot", "bossBully"
+            "assault", "marksman", "pmcUsec", "exUsec", "pmcBot", "bossBully"
         ],
         AlwaysFriends: [
             "bossZryachiy", "followerZryachiy", "peacefullZryachiyEvent", "ravangeZryachiyEvent", "gifter"
@@ -29,7 +29,7 @@ export const defaultHostility: IBotType["defaultSettings"]["BotHostility"] = [
         Warn: ["sectactPriestEvent"]
     },
     {
-        BotRole: "pmcUSEC",
+        BotRole: "pmcUsec",
         AlwaysEnemies: [
             "bossTest", "followerTest", "bossKilla", "bossKojaniy", "followerKojaniy",
             "cursedAssault", "bossGluhar", "followerGluharAssault", "followerGluharSecurity",
@@ -40,7 +40,7 @@ export const defaultHostility: IBotType["defaultSettings"]["BotHostility"] = [
             "bossBoarSniper", "crazyAssaultEvent", "sectactPriestEvent", "followerBoarClose1",
             "followerBoarClose2", "bossKolontay", "followerKolontayAssault", "followerKolontaySecurity",
             "bossPartisan", "spiritWinter", "spiritSpring", "peacemaker", "skier",
-            "assault", "marksman", "pmcBEAR", "exUsec", "pmcBot", "bossBully"
+            "assault", "marksman", "pmcBear", "exUsec", "pmcBot", "bossBully"
         ],
         AlwaysFriends: [
             "bossZryachiy", "followerZryachiy", "peacefullZryachiyEvent", "ravangeZryachiyEvent", "gifter"
@@ -69,7 +69,7 @@ export const originalMapList = [
 ] as const;
 
 export const bossesToRemoveFromPool: Set<string> = new Set([
-    "assault", "pmcBEAR", "pmcUSEC",
+    "assault", "pmcBear", "pmcUsec",
     "infectedAssault", "infectedTagilla", "infectedLaborant", "infectedCivil"
 ]);
 
@@ -119,11 +119,11 @@ export const bossPerformanceHash: Record<string, BossPerformanceOverride> = {
 
 export const validBosses = [
     "bossKojaniy", "bossGluhar", "bossSanitar", "bossKilla", "bossTagilla", "bossKnight", "bossBoar",
-    "bossKolontay", "bossPartisan", "bossBully", "bossZryachiy", "exUsec", "pmcBot", "pmcBEAR", "pmcUSEC",
+    "bossKolontay", "bossPartisan", "bossBully", "bossZryachiy", "exUsec", "pmcBot", "pmcBear", "pmcUsec",
     "assault", "marksman", "zombie"
 ];
 
 export const validTemplates = [
     "normal", "hard", "impossible", "easy", "assault", "marksman", "zombie",
-    "pmcBot", "exUsec", "pmcBEAR", "pmcUSEC", "usec", "bear"
+    "pmcBot", "exUsec", "pmcBear", "pmcUsec", "Usec", "Bear"
 ];

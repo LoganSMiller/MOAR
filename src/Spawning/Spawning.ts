@@ -1,4 +1,4 @@
-import { IBotConfig } from "@spt/models/spt/config/IBotConfig";
+""import { IBotConfig } from "@spt/models/spt/config/IBotConfig";
 import { IPmcConfig } from "@spt/models/spt/config/IPmcConfig";
 import { DatabaseServer } from "@spt/servers/DatabaseServer";
 import { ConfigServer } from "@spt/servers/ConfigServer";
@@ -131,9 +131,12 @@ export const buildWaves = (container: DependencyContainer): void => {
         if (mapId && !globalValues.indexedMapSpawns[mapId]) {
             globalValues.indexedMapSpawns[mapId] = loc.base.SpawnPointParams.map((p: any) => ({
                 ...p,
-                type: p.type || "scav"
+                type: p?.type ?? (p.Categories?.includes("Player") ? "player" : p.Categories?.includes("Coop") ? "pmc" : p.Categories?.includes("Boss") ? "boss" : "scav")
             }));
         }
+
+        // Also clear boss spawns before rebuild
+        loc.base.BossLocationSpawn = [];
     }
 
     // Disable PMC conversion to ensure clean faction spawning
@@ -142,7 +145,7 @@ export const buildWaves = (container: DependencyContainer): void => {
             assault: { min: 0, max: 0 },
             cursedassault: { min: 0, max: 0 },
             pmcbot: { min: 0, max: 0 },
-            exusec: { min: 0, max: 0 },
+            exUsec: { min: 0, max: 0 },
             arenafighter: { min: 0, max: 0 },
             arenafighterevent: { min: 0, max: 0 },
             crazyassaultevent: { min: 0, max: 0 }
@@ -152,19 +155,16 @@ export const buildWaves = (container: DependencyContainer): void => {
         rezervbase: { pmcbot: { min: 0, max: 0 } }
     };
 
-    // Adjust behavior if Starting PMCs is on
     if (config.startingPmcs && (!config.randomSpawns || config.spawnSmoothing)) {
         logger.warning("[MOAR] Starting PMCs enabled. Forcing randomSpawns = true, spawnSmoothing = false.");
         config.spawnSmoothing = false;
         config.randomSpawns = true;
     }
 
-    // Difficulty tweaks
     if (advancedConfig.MarksmanDifficultyChanges) {
         marksmanChanges(bots);
     }
 
-    // === Main spawn logic ===
     updateSpawnLocations(locationList, config);
     setEscapeTimeOverrides(locationList, mapConfig, logger, config);
 
@@ -189,7 +189,6 @@ export const buildWaves = (container: DependencyContainer): void => {
 
     enforceSmoothing(locationList, config, logger);
 
-    // Final boss cleanup pass (de-duplication)
     for (const loc of locationList) {
         const seen = new Set<string>();
         loc.base.BossLocationSpawn = (loc.base.BossLocationSpawn ?? []).filter((boss: any) => {
@@ -211,9 +210,15 @@ export const buildWaves = (container: DependencyContainer): void => {
             seen.add(key);
             return true;
         });
+
+        // ✅ Validate spawns for missing side/category
+        for (const p of loc.base.SpawnPointParams) {
+            if (!p.Categories || !p.Sides) {
+                console.warn(`[MOAR] 🟡 Missing category/side on spawn ${p.Id} in ${loc.base.Id}`);
+            }
+        }
     }
 
-    // Final report
     saveToFile("spawned", locationList.map(loc => ({
         map: loc.base.Id,
         spawns: loc.base.SpawnPointParams?.length ?? 0,

@@ -43,16 +43,14 @@ export default function updateSpawnLocations(
         }
 
         const selected = getRandomInArray(playerSpawns);
-        if (!selected?.Position || selected.Position == null) {
+        if (!selected?.Position) {
             if (activeConfig.debug?.enabled) {
                 console.warn(`[MOAR] Invalid selected player spawn for ${mapName}.`);
             }
             continue;
         }
 
-        if (!globalValues.playerSpawn || !globalValues.playerSpawn.Position) {
-            globalValues.playerSpawn = selected;
-        }
+        globalValues.playerSpawn ??= selected;
 
         const { x, y, z } = selected.Position;
         const sortedSpawns = getSortedSpawnPointList(mapSpawns, x, y, z);
@@ -73,10 +71,6 @@ export default function updateSpawnLocations(
         }
 
         const nonPlayerSpawns = sortedSpawns.filter(spawn => spawn.type !== "player");
-
-        if (!locationList[index]?.base?.SpawnPointParams) {
-            locationList[index].base.SpawnPointParams = [];
-        }
 
         locationList[index].base.SpawnPointParams = [
             ...clusteredPlayerSpawns,

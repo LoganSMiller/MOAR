@@ -85,12 +85,12 @@ export const setUpZombies = (container: DependencyContainer): void => {
 
     eventConfig.hostilitySettingsForEvent[zombieEvent.name].default = 
         eventConfig.hostilitySettingsForEvent[zombieEvent.name].default
-            .filter(({ BotRole }) => !["pmcBEAR", "pmcUSEC"].includes(BotRole))
+            .filter(({ BotRole }) => !["pmcBear", "pmcUsec"].includes(BotRole))
             .map((host) => ({
                 ...host,
                 AlwaysEnemies: [
                     "infectedAssault", "infectedPmc", "infectedCivil", "infectedLaborant", "infectedTagilla",
-                    "pmcBEAR", "pmcUSEC"
+                    "pmcBear", "pmcUsec"
                 ],
                 AlwaysNeutral: [
                     "marksman", "assault", "bossTest", "bossBully", "followerTest", "bossKilla",
