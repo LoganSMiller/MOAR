@@ -1,10 +1,12 @@
 import fs from "fs";
 import path from "path";
 import { Ixyz } from "../Models/Ixyz";
+import config from "../../config/config.json";
 
 const SPAWN_DIR = path.resolve(__dirname, "../../config/Spawns");
 const LOG_PREFIX = "[MOAR:SpawnUtils]";
 const DELETE_DISTANCE_THRESHOLD = 15;
+const GROUP_RADIUS = 8;
 const DEBUG = false;
 
 export type BotSpawnType =
@@ -16,9 +18,6 @@ export type BotSpawnType =
     | "zombie"
     | "mixed";
 
-/**
- * Ensures a file exists; creates an empty object file if missing.
- */
 function ensureJsonFileExists(filePath: string): void {
     if (!fs.existsSync(SPAWN_DIR)) {
         fs.mkdirSync(SPAWN_DIR, { recursive: true });
@@ -30,9 +29,26 @@ function ensureJsonFileExists(filePath: string): void {
     }
 }
 
-/**
- * Generic JSON updater with error handling and type safety.
- */
+function clampDistance(xyz: Ixyz): Ixyz {
+    const min = config.spawnMinDistance ?? 50;
+    const max = config.spawnMaxDistance ?? 250;
+    const distance = Math.sqrt(xyz.x ** 2 + xyz.z ** 2);
+    if (distance < min || distance > max) {
+        const scale = Math.max(min, Math.min(max, distance)) / distance;
+        return new Ixyz(xyz.x * scale, xyz.y, xyz.z * scale);
+    }
+    return xyz;
+}
+
+function findGroupSpawn(center: Ixyz, points: Ixyz[]): Ixyz[] {
+    return points.filter(p => {
+        const dx = p.x - center.x;
+        const dy = p.y - center.y;
+        const dz = p.z - center.z;
+        return dx * dx + dy * dy + dz * dz <= GROUP_RADIUS ** 2;
+    });
+}
+
 export const updateJsonFile = <T>(
     filePath: string,
     callback: (jsonData: T) => void,
@@ -53,9 +69,6 @@ export const updateJsonFile = <T>(
     }
 };
 
-/**
- * Adds a new spawn to a map's JSON config, ensuring y-offset for ground safety.
- */
 export const updateBotSpawn = (
     map: string,
     value: Ixyz,
@@ -65,15 +78,28 @@ export const updateBotSpawn = (
     const key = map.toLowerCase();
 
     updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
-        const adjusted = new Ixyz(value.x, value.y + 0.5, value.z);
+        let adjusted = new Ixyz(value.x, value.y + 0.5, value.z);
+        adjusted = clampDistance(adjusted);
+
         jsonData[key] ??= [];
-        jsonData[key].push(adjusted);
+
+        if (type === "player") {
+            const group = findGroupSpawn(adjusted, jsonData[key]);
+
+            if (group.length > 0) {
+                // Force all players into the first group spawn's location
+                adjusted = group[0];
+            } else {
+                jsonData[key].push(adjusted);
+            }
+        } else {
+            if (!jsonData[key].some(p => Math.abs(p.x - adjusted.x) < 0.01 && Math.abs(p.z - adjusted.z) < 0.01)) {
+                jsonData[key].push(adjusted);
+            }
+        }
     }, `Added ${type} spawn to '${map}'`);
 };
 
-/**
- * Deletes the nearest spawn within DELETE_DISTANCE_THRESHOLD.
- */
 export const deleteBotSpawn = (
     map: string,
     value: Ixyz,
@@ -110,9 +136,6 @@ export const deleteBotSpawn = (
     }, `Removed ${type} spawn from '${map}'`);
 };
 
-/**
- * Removes duplicates from a set of Ixyz entries using rounded precision.
- */
 function dedupeIxyzArray(points: Ixyz[]): Ixyz[] {
     const seen = new Set<string>();
     return points.filter(p => {
@@ -123,9 +146,6 @@ function dedupeIxyzArray(points: Ixyz[]): Ixyz[] {
     });
 }
 
-/**
- * Replaces all spawn entries for a given type. Only use outside live raids.
- */
 export const updateAllBotSpawns = (
     values: Record<string, Ixyz[]>,
     targetType: BotSpawnType | string
@@ -135,12 +155,13 @@ export const updateAllBotSpawns = (
 
     updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
         for (const [map, rawPoints] of Object.entries(values)) {
-            const deduped = dedupeIxyzArray(rawPoints);
+            const clamped = rawPoints.map(clampDistance);
+            const deduped = dedupeIxyzArray(clamped);
             jsonData[map] = deduped;
 
             if (DEBUG) {
                 console.log(`${LOG_PREFIX} [${map}] ${safeType} spawns updated (${deduped.length} points)`);
             }
         }
-    }, `Overwrote all ${safeType} spawns (deduplicated)`);
+    }, `Overwrote all ${safeType} spawns (deduplicated + clamped)`);
 };

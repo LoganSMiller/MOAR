@@ -1,52 +1,5 @@
-import { EPlayerSide } from "@spt-aki/models/enums/EPlayerSide";
-import { EBotType } from "@spt-aki/models/enums/EBotType";
-
 /**
- * Valid bot side types (converted to EFT enum-safe numbers).
- */
-export type Side = EPlayerSide;
-
-/**
- * Valid bot categories as defined in EFT/SPT (e.g. assault, pmcBot, bossKilla).
- */
-export type Category = EBotType;
-
-/**
- * Parses a string into a valid EPlayerSide enum value.
- * Defaults to Savage if unrecognized.
- */
-export function parseSide(value: string): EPlayerSide {
-    switch (value.toLowerCase()) {
-        case "usec":
-            return EPlayerSide.Usec;
-        case "bear":
-            return EPlayerSide.Bear;
-        case "scav":
-        case "savage":
-            return EPlayerSide.Savage;
-        default:
-            console.warn(`[MOAR] Unknown side '${value}', defaulting to Savage`);
-            return EPlayerSide.Savage;
-    }
-}
-
-/**
- * Parses a string into a valid EBotType category value.
- * Defaults to "assault" if unrecognized.
- */
-export function parseCategory(value: string): EBotType {
-    const lower = value.toLowerCase();
-    const values = Object.values(EBotType) as string[];
-    if (values.includes(lower)) {
-        return lower as EBotType;
-    }
-
-    console.warn(`[MOAR] Unknown category '${value}', defaulting to 'assault'`);
-    return EBotType.assault;
-}
-
-/**
- * Core MOAR config structure, representing values from config.json.
+ * Core MOAR config structure, sourced from config.json
  */
 export interface MOARConfig {
     defaultPreset: string;
@@ -110,7 +63,7 @@ export interface MOARConfig {
 }
 
 /**
- * A config preset that partially overrides the base config.
+ * Config preset override, partially extending base config
  */
 export interface MOARPresetConfig extends Partial<MOARConfig> {
     label?: string;
@@ -119,7 +72,7 @@ export interface MOARPresetConfig extends Partial<MOARConfig> {
 }
 
 /**
- * Health stats for a single body part.
+ * Health model for a single body part
  */
 export interface HealthPart {
     Current: number;
@@ -127,7 +80,7 @@ export interface HealthPart {
 }
 
 /**
- * Full health structure for a bot.
+ * Full body part health breakdown
  */
 export interface HealthPartList {
     Head: HealthPart;
@@ -140,7 +93,7 @@ export interface HealthPartList {
 }
 
 /**
- * Boss override configuration (per boss).
+ * Per-boss override structure, e.g. per-map boss tuning
  */
 export interface BossChanceOverrides {
     [bossName: string]: {
@@ -151,7 +104,7 @@ export interface BossChanceOverrides {
 }
 
 /**
- * Optional map-specific tuning overrides.
+ * Configurable values specific to one map
  */
 export interface MapSettings {
     sniperQuantity?: number;
@@ -171,7 +124,7 @@ export interface MapSettings {
 }
 
 /**
- * Configuration for boss performance overrides.
+ * Optional boss performance tuning patch
  */
 export interface BossPerformanceOverride {
     BossChance?: number;
@@ -182,3 +135,39 @@ export interface BossPerformanceOverride {
     TriggerName?: string;
     RandomTimeSpawn?: boolean;
 }
+
+/**
+ * Bot side types (used in ISpawnPointParam.Sides)
+ */
+export type Side = "Savage" | "Usec" | "Bear";
+
+/**
+ * Template roles used by MOAR for spawn logic
+ */
+export type Category =
+    | "assault"
+    | "pmcbot"
+    | "exusec"
+    | "bossBully"
+    | "bossGluhar"
+    | "bossKilla"
+    | "bossKojaniy"
+    | "bossSanitar"
+    | "bossTagilla"
+    | "followerBully"
+    | "followerGluharAssault"
+    | "followerGluharSecurity"
+    | "followerGluharScout"
+    | "followerKojaniy"
+    | "followerSanitar"
+    | "followerTagilla"
+    | "marksman"
+    | "cursedassault"
+    | "arenafighter"
+    | "arenafighterevent"
+    | "crazyassaultevent";
+
+/**
+ * Difficulty modes applied to BossDifficult/BossEscortDifficult/etc.
+ */
+export type Difficulty = "easy" | "normal" | "hard" | "impossible";

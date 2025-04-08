@@ -28,6 +28,7 @@ export class RNG {
      * @param max - Maximum value
      */
     public nextInt(min: number, max: number): number {
+        if (min > max) [min, max] = [max, min]; // Swap if input is invalid
         return Math.floor(this.next() * (max - min + 1)) + min;
     }
 
@@ -43,6 +44,7 @@ export class RNG {
      * @param array - The array to pick from
      */
     public pick<T>(array: T[]): T {
+        if (!array.length) throw new Error("RNG.pick() received an empty array.");
         return array[Math.floor(this.next() * array.length)];
     }
 
@@ -52,5 +54,12 @@ export class RNG {
      */
     public fork(): RNG {
         return new RNG(this.seed + 1337);
+    }
+
+    /**
+     * Returns the current internal seed (mainly for debug or deterministic tracing).
+     */
+    public getSeed(): number {
+        return this.seed;
     }
 }

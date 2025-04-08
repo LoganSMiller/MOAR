@@ -27,6 +27,8 @@
 
   "spawnRadius": 20,
   "spawnDelay": 4,
+  "spawnMinDistance": 50,
+  "spawnMaxDistance": 250,
 
   "maxBotCap": 20,
   "maxBotPerZone": 6,

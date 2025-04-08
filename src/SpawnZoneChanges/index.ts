@@ -16,25 +16,36 @@ const spawnRegistry: Record<BotSpawnType, Record<string, ISpawnPointParam[]>> = 
     pmc: pmcSpawns
 };
 
+/**
+ * Returns spawn data for a specific bot type.
+ * Logs a warning and returns empty if unknown.
+ */
 export function getSpawnData(type: string): Record<string, ISpawnPointParam[]> {
     const normalized = type.toLowerCase() as BotSpawnType;
-
     if (normalized in spawnRegistry) {
         return spawnRegistry[normalized];
     }
 
-    console.warn(`${LOG_PREFIX} Unknown spawn type requested: '${type}'`);
+    console.warn(`${LOG_PREFIX} ⚠ Unknown spawn type requested: '${type}'`);
     return {};
 }
 
+/**
+ * Flattens and returns all spawn points across all types and maps.
+ * Filters out entries without Position or BotZoneName.
+ */
 export function getAllSpawnData(): ISpawnPointParam[] {
-    return Object.values(spawnRegistry).flatMap(typeMap => {
-        return Object.values(typeMap).flat().filter(spawn => {
-            return spawn?.BotZoneName && spawn?.Position;
-        });
-    });
+    return Object.values(spawnRegistry).flatMap(mapSet =>
+        Object.values(mapSet).flat().filter(spawn =>
+            spawn?.BotZoneName && spawn?.Position
+        )
+    );
 }
 
+/**
+ * Validates spawn config structure and required fields.
+ * Logs specific errors for missing values.
+ */
 export function validateSpawns(): boolean {
     let isValid = true;
     const requiredFields: (keyof ISpawnPointParam)[] = ["BotZoneName", "Position"];
@@ -42,16 +53,16 @@ export function validateSpawns(): boolean {
     for (const [type, maps] of Object.entries(spawnRegistry) as [BotSpawnType, Record<string, ISpawnPointParam[]>][]) {
         for (const [map, spawns] of Object.entries(maps)) {
             if (!Array.isArray(spawns)) {
-                console.error(`${LOG_PREFIX} Spawn list for '${type}' on '${map}' is not an array.`);
+                console.error(`${LOG_PREFIX} ❌ Spawn list for '${type}' on '${map}' is not an array.`);
                 isValid = false;
                 continue;
             }
 
-            spawns.forEach((spawn, i) => {
+            spawns.forEach((spawn, index) => {
                 for (const field of requiredFields) {
                     if (spawn[field] == null) {
                         console.error(
-                            `${LOG_PREFIX} Missing field '${String(field)}' in ${type} spawn [${map}], index ${i}`
+                            `${LOG_PREFIX} ❌ Missing field '${String(field)}' in ${type} spawn [${map}], index ${index}`
                         );
                         isValid = false;
                     }
@@ -63,6 +74,9 @@ export function validateSpawns(): boolean {
     return isValid;
 }
 
+/**
+ * Returns a count of spawn points by type.
+ */
 export function getSpawnSummary(): Record<BotSpawnType, number> {
     return {
         player: Object.values(spawnRegistry.player).flat().length,

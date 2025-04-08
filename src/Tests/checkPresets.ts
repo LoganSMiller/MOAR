@@ -4,12 +4,14 @@ import baseConfig from "../../config/config.json";
 import presets from "../../config/Presets.json";
 import presetWeightings from "../../config/PresetWeightings.json";
 
+const STRICT_MODE = true; // 🧨 Set true to abort startup on validation errors
+
 /**
  * Validates MOAR's preset system:
  * - Every preset in PresetWeightings.json exists in Presets.json
- * - Every preset key maps to a valid config field or is a known metadata field
- * 
- * Logs all validation issues clearly to the server console.
+ * - Every preset key maps to a valid config field or known metadata
+ * - Warns for presets that are unused / unreferenced
+ * - Logs all usable presets + weights
  */
 export default function checkPresetLogic(container: DependencyContainer): void {
     const logger = container.resolve<ILogger>("WinstonLogger");
@@ -44,9 +46,27 @@ export default function checkPresetLogic(container: DependencyContainer): void {
         }
     }
 
-    if (!hasIssues) {
-        logger.info("[MOAR]: ✅ Preset validation passed with no errors.");
-    } else {
+    // === Step 3: Detect unused presets (defined but not weighted) ===
+    for (const name of Object.keys(presets)) {
+        if (!(name in presetWeightings)) {
+            logger.warn(`[MOAR]: ⚠️ Preset "${name}" is defined in Presets.json but never used in PresetWeightings.json`);
+        }
+    }
+
+    // === Step 4: Print usable presets + weights for debug
+    const usable = Object.entries(presetWeightings)
+        .filter(([name]) => name in presets)
+        .map(([name, weight]) => `${name} (${weight})`);
+
+    logger.info(`[MOAR]: 🎯 Usable presets: ${usable.join(", ")}`);
+
+    // === Final result
+    if (hasIssues) {
         logger.warn("[MOAR]: ⚠️ Preset validation completed with issues. Review log above.");
+        if (STRICT_MODE) {
+            throw new Error("[MOAR]: Startup aborted — preset validation failed.");
+        }
+    } else {
+        logger.info("[MOAR]: ✅ Preset validation passed with no errors.");
     }
 }

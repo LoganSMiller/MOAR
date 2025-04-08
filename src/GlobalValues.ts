@@ -3,14 +3,14 @@ import { MOARConfig } from "./types";
 import fs from "fs";
 import path from "path";
 
-// === Config paths ===
+// === Config path ===
 const CONFIG_PATH = path.resolve(__dirname, "../config/config.json");
 
-// === Safe JSON loader ===
+// === Safe config loader ===
 function loadConfigFile<T = unknown>(filePath: string): T | null {
     try {
         if (!fs.existsSync(filePath)) {
-            console.warn("[MOAR] Config file does not exist at:", filePath);
+            console.warn("[MOAR] Config file not found:", filePath);
             return null;
         }
 
@@ -23,7 +23,7 @@ function loadConfigFile<T = unknown>(filePath: string): T | null {
     }
 }
 
-// === Load base config with fallback ===
+// === Initial config load ===
 let loadedConfig = loadConfigFile<MOARConfig>(CONFIG_PATH);
 if (!loadedConfig) {
     throw new Error("[MOAR] Cannot start — config.json is missing or invalid.");
@@ -34,7 +34,7 @@ if (DEBUG) {
     console.log("[MOAR] Config loaded. Default preset:", loadedConfig.defaultPreset);
 }
 
-// === Global Interface ===
+// === Shared Global Singleton Type ===
 export interface GlobalValuesType {
     baseConfig: MOARConfig;
     overrideConfig: Partial<MOARConfig>;
@@ -48,11 +48,15 @@ export interface GlobalValuesType {
     initialized: boolean;
     modVersion: string;
 
+    // Optional: preload support for future UI/preset lists
+    possiblePresets?: string[];
+
+    // Methods
     reloadConfig: () => void;
     clear: () => void;
 }
 
-// === Global Singleton ===
+// === Global State Instance ===
 const globalValues: GlobalValuesType = {
     baseConfig: loadedConfig,
     overrideConfig: {},
@@ -66,28 +70,28 @@ const globalValues: GlobalValuesType = {
     initialized: false,
     modVersion: "",
 
-    reloadConfig: (): void => {
+    reloadConfig(): void {
         const newConfig = loadConfigFile<MOARConfig>(CONFIG_PATH);
         if (!newConfig) {
             console.error("[MOAR] Failed to reload config.json — keeping previous config.");
             return;
         }
 
-        globalValues.baseConfig = newConfig;
-        globalValues.forcedPreset = newConfig.defaultPreset ?? "random";
+        this.baseConfig = newConfig;
+        this.forcedPreset = newConfig.defaultPreset ?? "random";
 
         if (newConfig.debug?.enabled) {
-            console.log("[MOAR] baseConfig hot-reloaded. New preset:", globalValues.forcedPreset);
+            console.log("[MOAR] baseConfig hot-reloaded. New preset:", this.forcedPreset);
         }
     },
 
-    clear: (): void => {
-        globalValues.locationsBase = [];
-        globalValues.indexedMapSpawns = {};
-        globalValues.addedMapZones = {};
-        globalValues.playerSpawn = undefined;
-        globalValues.coopSpawnZone = undefined;
-        globalValues.initialized = false;
+    clear(): void {
+        this.locationsBase = [];
+        this.indexedMapSpawns = {};
+        this.addedMapZones = {};
+        this.playerSpawn = undefined;
+        this.coopSpawnZone = undefined;
+        this.initialized = false;
 
         if (DEBUG) {
             console.log("[MOAR] Global state cleared for new session or map load.");

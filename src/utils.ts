@@ -7,12 +7,13 @@ import { IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
 
 import globalValues from "./GlobalValues";
 import { MOARConfig, MapSettings } from "./types";
+import { defaultEscapeTimes } from "./Spawning/constants";
 
-// Paths to configs
+// === Paths to config ===
 const configPath = path.resolve(__dirname, "../config/config.json");
 const mapConfigPath = path.resolve(__dirname, "../config/mapConfig.json");
 
-// Safe JSON loading
+// === Safe JSON loading ===
 function loadJSON<T = Record<string, unknown>>(filePath: string, label: string): T {
     if (!fs.existsSync(filePath)) {
         console.error(`[MOAR] ❌ ${label} file not found at: ${filePath}`);
@@ -29,27 +30,26 @@ function loadJSON<T = Record<string, unknown>>(filePath: string, label: string):
     }
 }
 
-// Fully typed configs
+// === Fallback-only typed config access (used only for hard fallback) ===
 const config: MOARConfig = loadJSON<MOARConfig>(configPath, "config.json");
 const mapConfig: Record<string, MapSettings> = loadJSON<Record<string, MapSettings>>(mapConfigPath, "mapConfig.json");
 
-/**
- * Converts a kebab-case string to Title Case.
- */
+// === Text Utilities ===
 export function kebabToTitle(text: string): string {
     return text.replace(/-/g, " ").replace(/\b\w/g, char => char.toUpperCase());
 }
 
-/**
- * Deep clone for serializable objects.
- */
+// === Deep Clone Utility ===
 export function cloneDeep<T>(value: T): T {
-    return JSON.parse(JSON.stringify(value));
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch {
+        console.warn("[MOAR] ⚠ cloneDeep failed. Returning default value.");
+        return {} as T;
+    }
 }
 
-/**
- * Full shuffle using Fisher-Yates.
- */
+// === Shuffle Utilities ===
 export function shuffle<T>(array: T[]): T[] {
     const arr = [...array];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -59,9 +59,6 @@ export function shuffle<T>(array: T[]): T[] {
     return arr;
 }
 
-/**
- * Partial shuffle with limited swaps.
- */
 export function looselyShuffle<T>(array: T[], swaps = 3): T[] {
     const arr = [...array];
     for (let i = 0; i < swaps; i++) {
@@ -72,23 +69,17 @@ export function looselyShuffle<T>(array: T[], swaps = 3): T[] {
     return arr;
 }
 
-/**
- * Picks a random element from an array.
- */
+// === Random ===
 export function getRandomInArray<T>(arr: T[]): T {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
-/**
- * Returns the current preset or fallback config.
- */
+// === Config Preset Access ===
 export function getRandomPresetOrCurrentlySelectedPreset(): MOARConfig {
-    return config;
+    return config; // fallback-only use case
 }
 
-/**
- * Saves any object to disk as a debug JSON file.
- */
+// === File Dumping ===
 export function saveToFile(filename: string, value: unknown): void {
     try {
         const modDirectory = path.resolve(__dirname, "../../../");
@@ -115,9 +106,7 @@ export function saveToFile(filename: string, value: unknown): void {
     }
 }
 
-/**
- * Applies spawn smoothing to all boss wave times.
- */
+// === Spawn Smoothing ===
 export function enforceSmoothing(
     locationList: ILocation[],
     config: MOARConfig,
@@ -143,21 +132,18 @@ export function enforceSmoothing(
     }
 }
 
-/**
- * Sets EscapeTimeLimit per map, using fallback if needed.
- */
+// === Escape Time Overrides ===
 export function setEscapeTimeOverrides(
     locations: ILocation[],
     mapOverrides: Record<string, MapSettings>,
     logger: ILogger,
     activeConfig: MOARConfig
 ): void {
-    const fallbackTime = 45;
-
     for (const loc of locations) {
         const mapId = loc.base.Id;
         const mapSettings = mapOverrides[mapId];
         const overrideTime = mapSettings?.escapeTimeOverride;
+        const fallbackTime = defaultEscapeTimes[mapId as keyof typeof defaultEscapeTimes] ?? 45;
 
         loc.base.EscapeTimeLimit = typeof overrideTime === "number"
             ? overrideTime
@@ -173,9 +159,7 @@ export function setEscapeTimeOverrides(
     }
 }
 
-/**
- * Validates that spawn setup can continue safely.
- */
+// === Wave Spawn Sanity Check ===
 export function validateWaveBuildSanity(
     locations: ILocation[],
     logger: ILogger

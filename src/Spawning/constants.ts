@@ -1,3 +1,10 @@
+/**
+ * Shared MOAR constants for bot roles, hostility logic, zone mappings,
+ * spawn performance tuning, and supported boss/template definitions.
+ *
+ * Used in spawn builders, wave generators, and config sanitization layers.
+ */
+
 import { IBotType } from "@spt/models/eft/common/tables/IBotType";
 import { BossPerformanceOverride } from "../types";
 
@@ -95,14 +102,14 @@ export const defaultEscapeTimes: Record<ConfigMapName, number> = {
 
 export const bossPerformanceHash: Record<string, BossPerformanceOverride> = {
     bossZryachiy: { BossChance: 50, BossEscortAmount: "0" },
-    exUsec:       { BossChance: 35, BossEscortAmount: "1" },
-    skier:        { BossEscortAmount: "2,2,3,3" },
-    sectantPriest:{ BossEscortAmount: "1,2,2" },
-    bossBully:    { BossEscortAmount: "2,3" },
-    bossBoar:     { BossEscortAmount: "1,2,2,2" },
+    exUsec: { BossChance: 35, BossEscortAmount: "1" },
+    skier: { BossEscortAmount: "2,2,3,3" },
+    sectantPriest: { BossEscortAmount: "1,2,2" },
+    bossBully: { BossEscortAmount: "2,3" },
+    bossBoar: { BossEscortAmount: "1,2,2,2" },
     bossBoarSniper: { BossEscortAmount: "1" },
-    bossKojaniy:  { BossEscortAmount: "1,2,2" },
-    bossSanitar:  { BossEscortAmount: "1,2,3" },
+    bossKojaniy: { BossEscortAmount: "1,2,2" },
+    bossSanitar: { BossEscortAmount: "1,2,3" },
     bossPartisan: {
         BossEscortAmount: "1,1,2",
         BossEscortType: "assault",
@@ -117,13 +124,27 @@ export const bossPerformanceHash: Record<string, BossPerformanceOverride> = {
     }
 };
 
-export const validBosses = [
-    "bossKojaniy", "bossGluhar", "bossSanitar", "bossKilla", "bossTagilla", "bossKnight", "bossBoar",
-    "bossKolontay", "bossPartisan", "bossBully", "bossZryachiy", "exUsec", "pmcBot", "pmcBear", "pmcUsec",
+// Literal union types for inference and safety
+export type BossName =
+    | "bossKojaniy" | "bossGluhar" | "bossSanitar" | "bossKilla" | "bossTagilla"
+    | "bossKnight" | "bossBoar" | "bossKolontay" | "bossPartisan" | "bossBully"
+    | "bossZryachiy" | "exUsec" | "pmcBot" | "pmcBear" | "pmcUsec"
+    | "assault" | "marksman" | "zombie";
+
+export type BotTemplate =
+    | "normal" | "hard" | "impossible" | "easy"
+    | "assault" | "marksman" | "zombie"
+    | "pmcBot" | "exUsec" | "pmcBear" | "pmcUsec"
+    | "Usec" | "Bear";
+
+export const validBosses: BossName[] = [
+    "bossKojaniy", "bossGluhar", "bossSanitar", "bossKilla", "bossTagilla",
+    "bossKnight", "bossBoar", "bossKolontay", "bossPartisan", "bossBully",
+    "bossZryachiy", "exUsec", "pmcBot", "pmcBear", "pmcUsec",
     "assault", "marksman", "zombie"
 ];
 
-export const validTemplates = [
+export const validTemplates: BotTemplate[] = [
     "normal", "hard", "impossible", "easy", "assault", "marksman", "zombie",
     "pmcBot", "exUsec", "pmcBear", "pmcUsec", "Usec", "Bear"
 ];

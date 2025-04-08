@@ -1,12 +1,12 @@
-import path from "path";
-import fs from "fs";
 import { DependencyContainer } from "tsyringe";
 import { StaticRouterModService } from "@spt/services/mod/staticRouter/StaticRouterModService";
 import { DynamicRouterModService } from "../Services/DynamicRouterModService";
+
 import { buildWaves } from "../Spawning/Spawning";
 import { deleteBotSpawn, updateBotSpawn } from "../SpawnZoneChanges/updateUtils";
 import globalValues from "../GlobalValues";
 import { kebabToTitle } from "../utils";
+
 import PresetWeightingsConfig from "../../config/PresetWeightings.json";
 import { Ixyz } from "../Models/Ixyz";
 
@@ -46,14 +46,15 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     const register = staticRouter.registerStaticRouter.bind(staticRouter);
 
+    // === Config endpoints ===
     register("getDefaultConfig", [{
         url: "/moar/getDefaultConfig",
-        action: async (): Promise<string> => JSON.stringify(getSafeConfig(globalValues.baseConfig))
+        action: async () => JSON.stringify(getSafeConfig(globalValues.baseConfig))
     }]);
 
     register("getServerConfigWithOverrides", [{
         url: "/moar/getServerConfigWithOverrides",
-        action: async (): Promise<string> => JSON.stringify(getSafeConfig({
+        action: async () => JSON.stringify(getSafeConfig({
             ...globalValues.baseConfig,
             ...globalValues.overrideConfig
         }))
@@ -61,34 +62,32 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     register("moarGetServerConfig", [{
         url: "/moar/getServerConfig",
-        action: async (): Promise<string> => JSON.stringify(getSafeConfig(globalValues.baseConfig))
+        action: async () => JSON.stringify(getSafeConfig(globalValues.baseConfig))
     }]);
 
+    // === Preset selection ===
     register("moarSetPreset", [{
         url: "/moar/setPreset",
-        action: async (_url: string, { Preset }: SetPresetRequest): Promise<string> => {
-            globalValues.forcedPreset = Preset;
-            buildWaves(container);
-            return `Current Preset: ${kebabToTitle(globalValues.forcedPreset || "Random")}`;
-        }
-    }]);
+        action: async (_url, body: SetPresetRequest) => {
+            const name = body?.Preset?.toLowerCase?.();
+            const isValid = name && name in PresetWeightingsConfig;
 
-    register("setOverrideConfig", [{
-        url: "/moar/setOverrideConfig",
-        action: async (_url: string, overrideConfig: Record<string, unknown>): Promise<string> => {
-            globalValues.overrideConfig = overrideConfig;
+            globalValues.forcedPreset = isValid ? name : "random";
+
+
             buildWaves(container);
-            return "Success";
+
+            return `Current Preset: ${kebabToTitle(globalValues.forcedPreset || "Random")}`;
         }
     }]);
 
     register("moarGetPresetsList", [{
         url: "/moar/getPresets",
-        action: async (): Promise<string> => JSON.stringify({
+        action: async () => JSON.stringify({
             data: [
-                ...Object.keys(PresetWeightingsConfig).map(preset => ({
-                    Name: kebabToTitle(preset),
-                    Label: preset
+                ...Object.keys(PresetWeightingsConfig).map(p => ({
+                    Name: kebabToTitle(p),
+                    Label: p
                 })),
                 { Name: "Random", Label: "random" },
                 { Name: "Custom", Label: "custom" }
@@ -98,23 +97,39 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     register("moarGetCurrentPreset", [{
         url: "/moar/currentPreset",
-        action: async (): Promise<string> => JSON.stringify(globalValues.forcedPreset || "random")
+        action: async () => JSON.stringify(globalValues.forcedPreset || "random")
     }]);
 
     register("moarGetAnnouncePreset", [{
         url: "/moar/announcePreset",
-        action: async (): Promise<string> => {
+        action: async () => {
             const forced = globalValues.forcedPreset?.toLowerCase();
-            const result = (forced === "random" || !forced)
+            const announce = (!forced || forced === "random")
                 ? globalValues.currentPreset
                 : globalValues.forcedPreset;
-            return JSON.stringify(result);
+            return JSON.stringify(announce);
         }
     }]);
 
+    // === Manual config override injection ===
+    register("setOverrideConfig", [{
+        url: "/moar/setOverrideConfig",
+        action: async (_url, overrideConfig: Record<string, unknown>) => {
+            try {
+                globalValues.overrideConfig = overrideConfig || {};
+                buildWaves(container);
+                return "Success";
+            } catch (e) {
+                console.error("[MOAR] Failed to apply override config:", e);
+                return "Failed to apply override config.";
+            }
+        }
+    }]);
+
+    // === Custom spawn injection ===
     register("moarAddBotSpawn", [{
         url: "/moar/addBotSpawn",
-        action: async (_url: string, req: AddSpawnRequest): Promise<string> => {
+        action: async (_url, req: AddSpawnRequest) => {
             updateBotSpawn(req.map, req.position, req.type);
             return "success";
         }
@@ -122,15 +137,16 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     register("moarDeleteBotSpawn", [{
         url: "/moar/deleteBotSpawn",
-        action: async (_url: string, req: AddSpawnRequest): Promise<string> => {
+        action: async (_url, req: AddSpawnRequest) => {
             deleteBotSpawn(req.map, req.position, req.type);
             return "success";
         }
     }]);
 
+    // === Server rebuild triggers ===
     register("moarReloadConfig", [{
         url: "/moar/reloadConfig",
-        action: async (): Promise<string> => {
+        action: async () => {
             globalValues.reloadConfig?.();
             buildWaves(container);
             return "Config reloaded and wave logic rebuilt.";
@@ -139,7 +155,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     register("moarRaidStartUpdater", [{
         url: "/client/raid/configuration",
-        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown): Promise<unknown> => {
+        action: async (_url, _info, _sessionId, output) => {
             buildWaves(container);
             return output;
         }
@@ -147,19 +163,20 @@ export const setupRoutes = (container: DependencyContainer): void => {
 
     register("moarUpdater", [{
         url: "/client/match/local/end",
-        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown): Promise<unknown> => {
+        action: async (_url, _info, _sessionId, output) => {
             buildWaves(container);
             return output;
         }
     }]);
 
+    // === Dynamic fallback route ===
     dynamicRouter.registerDynamicRouter("moarBuildWavesDynamic", [{
         route: "moar/buildWaves",
-        action: async (_url: string, _info: unknown, _sessionId: string, output: unknown): Promise<unknown> => {
+        action: async (_url, _info, _sessionId, output) => {
             buildWaves(container);
             return output;
         }
     }], "moar");
 
-    console.log("[MOAR] All server routes registered");
+    console.log("[MOAR] ✅ All server routes registered");
 };

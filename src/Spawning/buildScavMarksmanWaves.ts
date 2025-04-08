@@ -8,10 +8,15 @@ import { MapSettings, MOARConfig } from "../types";
 import { buildBotWaves } from "../spawnUtils";
 import getSortedSpawnPointList from "./spawnZoneUtils";
 import globalValues from "../GlobalValues";
+import { IBotConfig } from "@spt/models/spt/config/IBotConfig.d";
 
-export default function buildScavMarksmanWaves(
+/**
+ * Injects scav and marksman (sniper) waves across all supported maps.
+ */
+export function buildScavMarksmanWaves(
     config: MOARConfig,
-    locationList: ILocation[]
+    locationList: ILocation[],
+    botConfig: IBotConfig
 ): void {
     const mapSettingsList = Object.keys(mapConfig) as Array<keyof typeof mapConfig>;
 
@@ -27,7 +32,8 @@ export default function buildScavMarksmanWaves(
             }
         }
 
-        locationList[index].base.BotLocationModifier.AdditionalHostilitySettings = defaultHostility;
+        const location = locationList[index].base;
+        location.BotLocationModifier.AdditionalHostilitySettings = defaultHostility;
 
         const {
             scavHotZones = [],
@@ -39,39 +45,38 @@ export default function buildScavMarksmanWaves(
         const { x, y, z } = globalValues.playerSpawn?.Position ?? { x: 0, y: 0, z: 0 };
 
         let scavZones = getSortedSpawnPointList(
-            locationList[index].base.SpawnPointParams.filter((p: ISpawnPointParam) => p.type === "scav"),
+            location.SpawnPointParams.filter(p => p.Categories?.includes("Bot")),
             x, y, z
-        ).map((p: ISpawnPointParam) => p.BotZoneName || "zone_scav_fallback");
+        ).map(p => p.BotZoneName || "zone_scav_fallback");
 
         let sniperZones = getSortedSpawnPointList(
-            locationList[index].base.SpawnPointParams.filter((p: ISpawnPointParam) => p.type === "sniper"),
+            location.SpawnPointParams.filter(p => p.Categories?.includes("Bot")),
             x, y, z
-        ).map((p: ISpawnPointParam) => p.BotZoneName || "zone_sniper_fallback");
+        ).map(p => p.BotZoneName || "zone_sniper_fallback");
+
+        if (scavZones.length === 0) scavZones = ["zone_scav_fallback"];
+        if (sniperZones.length === 0) sniperZones = ["zone_sniper_fallback"];
 
         looselyShuffle(scavZones, 3);
         looselyShuffle(sniperZones, 2);
 
-        const escapeLimit = locationList[index].base.EscapeTimeLimit;
-        const baseEscapeTime = defaultEscapeTimes[map] ?? 45;
-        const escapeRatio = Math.round(
-            (typeof escapeLimit === "number" && !isNaN(escapeLimit) ? escapeLimit : baseEscapeTime) / baseEscapeTime
-        );
+        const escapeTime = typeof location.EscapeTimeLimit === "number" && !isNaN(location.EscapeTimeLimit)
+            ? location.EscapeTimeLimit
+            : defaultEscapeTimes[map] ?? 45;
 
-        let totalScavWaves = Math.round(scavWaveCount * config.scavWaveQuantity * escapeRatio);
-        if (scavHotZones.length && totalScavWaves > 0) {
-            totalScavWaves += scavHotZones.length;
-        }
+        const escapeRatio = Math.round(escapeTime / (defaultEscapeTimes[map] ?? 45));
+        const totalScavWaves = Math.max(1, Math.round(scavWaveCount * config.scavWaveQuantity * escapeRatio) + scavHotZones.length);
+        const totalSniperWaves = Math.min(sniperQuantity, sniperZones.length);
 
         while (totalScavWaves > scavZones.length) {
-            scavZones = scavZones.length === 0 ? ["zone_scav_fallback"] : [...scavZones, ...scavZones];
+            scavZones = [...scavZones, ...scavZones];
         }
 
-        const timeLimit = (typeof escapeLimit === "number" && !isNaN(escapeLimit) ? escapeLimit : baseEscapeTime) * 60;
+        const timeLimit = escapeTime * 60;
+        const assaultTemplate = validTemplates.includes("assault") ? "assault" : "assault";
+        const marksmanTemplate = validTemplates.includes("marksman") ? "marksman" : "marksman";
 
-        const assaultTemplate = validTemplates.includes("assault") ? "assault" : WildSpawnType.assault;
-        const marksmanTemplate = validTemplates.includes("marksman") ? "marksman" : WildSpawnType.marksman;
-
-        const scavWaves: IBossLocationSpawn[] = buildBotWaves({
+        const scavWaves = buildBotWaves({
             count: totalScavWaves,
             timeLimit,
             groupSize: config.scavMaxGroupSize,
@@ -85,8 +90,8 @@ export default function buildScavMarksmanWaves(
             isScav: true
         }, locationList[index]);
 
-        const sniperWaves: IBossLocationSpawn[] = buildBotWaves({
-            count: Math.min(sniperQuantity, sniperZones.length),
+        const sniperWaves = buildBotWaves({
+            count: totalSniperWaves,
             timeLimit,
             groupSize: config.sniperMaxGroupSize,
             groupChance: config.sniperGroupChance,
@@ -99,29 +104,29 @@ export default function buildScavMarksmanWaves(
             isScav: true
         }, locationList[index]);
 
-        const allScavs: IBossLocationSpawn[] = [...scavWaves, ...sniperWaves];
+        const allScavs = [...scavWaves, ...sniperWaves];
 
         if (allScavs.length && scavHotZones.length) {
             for (const zone of scavHotZones) {
-                const targetIndex = Math.floor(Math.random() * allScavs.length);
-                if (!allScavs[targetIndex].BossZone) {
-                    allScavs[targetIndex].BossZone = zone;
+                const target = allScavs[Math.floor(Math.random() * allScavs.length)];
+                if (!target.BossZone) {
+                    target.BossZone = zone;
                 }
             }
         }
 
+        const existing = location.BossLocationSpawn ?? [];
         const seen = new Set<string>();
-        const existing = locationList[index].base.BossLocationSpawn ?? [];
 
-        const merged = [...existing, ...allScavs].filter((boss): boss is IBossLocationSpawn => {
-            boss.Time = typeof boss.Time === "number" && !isNaN(boss.Time) ? boss.Time : 0;
-            const key = `${boss.BossName}-${boss.BossZone}-${boss.Time}`;
+        const merged = [...existing, ...allScavs].filter((wave): wave is IBossLocationSpawn => {
+            wave.Time = typeof wave.Time === "number" && !isNaN(wave.Time) ? wave.Time : 0;
+            const key = `${wave.BossName}-${wave.BossZone}-${wave.Time}`;
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
         });
 
-        locationList[index].base.BossLocationSpawn = merged;
+        location.BossLocationSpawn = merged;
 
         if (config.debug?.enabled) {
             console.log(`[MOAR] ${map}: Added ${allScavs.length} Scav+Sniper waves, final count: ${merged.length}`);

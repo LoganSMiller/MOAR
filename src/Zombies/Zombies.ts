@@ -1,10 +1,10 @@
+import fs from "fs";
+import path from "path";
 import { DependencyContainer } from "tsyringe";
-import {
-    ISeasonalEvent,
-    ISeasonalEventConfig
-} from "@spt/models/spt/config/ISeasonalEventConfig.d";
-import { ConfigServer } from "@spt/servers/ConfigServer";
+
+import { ISeasonalEvent, ISeasonalEventConfig } from "@spt/models/spt/config/ISeasonalEventConfig.d";
 import { ConfigTypes } from "@spt/models/enums/ConfigTypes";
+import { ConfigServer } from "@spt/servers/ConfigServer";
 import { SeasonalEventService } from "@spt/services/SeasonalEventService";
 
 /**
@@ -24,18 +24,12 @@ export const baseZombieSettings = (enabled: boolean, count: number): ISeasonalEv
         replaceBotHostility: true,
         zombieSettings: {
             enabled: true,
-            mapInfectionAmount: Object.fromEntries([
-                "Interchange",
-                "Lighthouse",
-                "RezervBase",
-                "Sandbox",
-                "Shoreline",
-                "TarkovStreets",
-                "Woods",
-                "bigmap",
-                "factory4",
-                "laboratory"
-            ].map(map => [map, count === -1 ? randomNumber100() : count])),
+            mapInfectionAmount: Object.fromEntries(
+                [
+                    "Interchange", "Lighthouse", "RezervBase", "Sandbox", "Shoreline",
+                    "TarkovStreets", "Woods", "bigmap", "factory4", "laboratory"
+                ].map((map) => [map, count === -1 ? randomNumber100() : count])
+            ),
             disableBosses: [],
             disableWaves: []
         }
@@ -43,70 +37,73 @@ export const baseZombieSettings = (enabled: boolean, count: number): ISeasonalEv
 });
 
 /**
- * Random number helper (0-100)
+ * Random number generator helper (0-100)
  */
 const randomNumber100 = (): number => Math.round(Math.random() * 100);
 
 /**
- * Reset active seasonal events with updated zombie config
+ * Reset current seasonal event configuration and apply zombie mode
  */
 export const resetCurrentEvents = (
     container: DependencyContainer,
     enabled: boolean,
     zombieWaveQuantity: number,
-    random: boolean = false
+    random = false
 ): void => {
     const configServer = container.resolve<ConfigServer>("ConfigServer");
-    const eventConfig = configServer.getConfig<ISeasonalEventConfig>(ConfigTypes.SEASONAL_EVENT);
-    const percent = random ? -1 : Math.min(100, Math.round(zombieWaveQuantity * 100));
+    const seasonalConfig = configServer.getConfig<ISeasonalEventConfig>(ConfigTypes.SEASONAL_EVENT);
 
-    eventConfig.events = [baseZombieSettings(enabled, percent)];
+    const percent = random ? -1 : Math.min(100, Math.round(zombieWaveQuantity * 100));
+    seasonalConfig.events = [baseZombieSettings(enabled, percent)];
 
     const seasonalEventService = container.resolve<SeasonalEventService>("SeasonalEventService") as any;
-
     seasonalEventService.currentlyActiveEvents = [];
     seasonalEventService.christmasEventActive = false;
     seasonalEventService.halloweenEventActive = false;
-
     seasonalEventService.cacheActiveEvents();
 };
 
 /**
- * Setup default zombie event config on server init
+ * Initialize the default zombie event configuration at server start
  */
 export const setUpZombies = (container: DependencyContainer): void => {
     const configServer = container.resolve<ConfigServer>("ConfigServer");
-    const eventConfig = configServer.getConfig<ISeasonalEventConfig>(ConfigTypes.SEASONAL_EVENT);
+    const seasonalConfig = configServer.getConfig<ISeasonalEventConfig>(ConfigTypes.SEASONAL_EVENT);
 
-    eventConfig.events = [baseZombieSettings(false, 100)];
+    const zombieEvent = baseZombieSettings(false, 100);
+    seasonalConfig.events = [zombieEvent];
 
-    const zombieEvent = eventConfig.events[0];
-    eventConfig.eventGear[zombieEvent.name] = {};
+    // Prepare hostility fallback rules
+    seasonalConfig.eventGear[zombieEvent.name] = {};
+    const baseHostility = seasonalConfig.hostilitySettingsForEvent[zombieEvent.name];
 
-    eventConfig.hostilitySettingsForEvent[zombieEvent.name].default = 
-        eventConfig.hostilitySettingsForEvent[zombieEvent.name].default
-            .filter(({ BotRole }) => !["pmcBear", "pmcUsec"].includes(BotRole))
-            .map((host) => ({
-                ...host,
-                AlwaysEnemies: [
-                    "infectedAssault", "infectedPmc", "infectedCivil", "infectedLaborant", "infectedTagilla",
-                    "pmcBear", "pmcUsec"
-                ],
-                AlwaysNeutral: [
-                    "marksman", "assault", "bossTest", "bossBully", "followerTest", "bossKilla",
-                    "bossKojaniy", "followerKojaniy", "pmcBot", "cursedAssault", "bossGluhar",
-                    "followerGluharAssault", "followerGluharSecurity", "followerGluharScout", "followerGluharSnipe",
-                    "followerSanitar", "bossSanitar", "test", "assaultGroup", "sectantWarrior", "sectantPriest",
-                    "bossTagilla", "followerTagilla", "exUsec", "gifter", "bossKnight", "followerBigPipe",
-                    "followerBirdEye", "bossZryachiy", "followerZryachiy", "bossBoar", "followerBoar",
-                    "arenaFighter", "arenaFighterEvent", "bossBoarSniper", "crazyAssaultEvent",
-                    "peacefullZryachiyEvent", "sectactPriestEvent", "ravangeZryachiyEvent",
-                    "followerBoarClose1", "followerBoarClose2", "bossKolontay", "followerKolontayAssault",
-                    "followerKolontaySecurity", "shooterBTR", "bossPartisan", "spiritWinter", "spiritSpring",
-                    "peacemaker", "skier"
-                ],
-                SavagePlayerBehaviour: "Neutral",
-                BearPlayerBehaviour: "AlwaysEnemies",
-                UsecPlayerBehaviour: "AlwaysEnemies"
-            }));
+    if (!baseHostility || !baseHostility.default) {
+        console.warn("[MOAR] Zombie event hostility settings were missing or incomplete.");
+        return;
+    }
+
+    baseHostility.default = baseHostility.default
+        .filter(({ BotRole }) => !["pmcBear", "pmcUsec"].includes(BotRole))
+        .map((host) => ({
+            ...host,
+            AlwaysEnemies: [
+                "infectedAssault", "infectedPmc", "infectedCivil", "infectedLaborant", "infectedTagilla",
+                "pmcBear", "pmcUsec"
+            ],
+            AlwaysNeutral: [
+                "marksman", "assault", "bossTest", "bossBully", "followerTest", "bossKilla", "bossKojaniy",
+                "followerKojaniy", "pmcBot", "cursedAssault", "bossGluhar", "followerGluharAssault",
+                "followerGluharSecurity", "followerGluharScout", "followerGluharSnipe", "followerSanitar",
+                "bossSanitar", "test", "assaultGroup", "sectantWarrior", "sectantPriest", "bossTagilla",
+                "followerTagilla", "exUsec", "gifter", "bossKnight", "followerBigPipe", "followerBirdEye",
+                "bossZryachiy", "followerZryachiy", "bossBoar", "followerBoar", "arenaFighter",
+                "arenaFighterEvent", "bossBoarSniper", "crazyAssaultEvent", "peacefullZryachiyEvent",
+                "sectactPriestEvent", "ravangeZryachiyEvent", "followerBoarClose1", "followerBoarClose2",
+                "bossKolontay", "followerKolontayAssault", "followerKolontaySecurity", "shooterBTR",
+                "bossPartisan", "spiritWinter", "spiritSpring", "peacemaker", "skier"
+            ],
+            SavagePlayerBehaviour: "Neutral",
+            BearPlayerBehaviour: "AlwaysEnemies",
+            UsecPlayerBehaviour: "AlwaysEnemies"
+        }));
 };

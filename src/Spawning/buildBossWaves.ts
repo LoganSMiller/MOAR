@@ -1,29 +1,34 @@
 import { ILocation } from "@spt/models/eft/common/ILocation";
 import { IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
+
 import rawBossConfig from "../../config/bossConfig.json";
-import { BossChanceOverrides, MOARConfig } from "../types";
 import advancedConfig from "../../config/advancedConfig.json";
 import rawMapConfig from "../../config/mapConfig.json";
 
 import {
-    bossesToRemoveFromPool,
-    bossPerformanceHash,
     configLocations,
     mainBossNameList,
+    bossesToRemoveFromPool,
+    bossPerformanceHash,
     validBosses,
     validTemplates
 } from "./constants";
 
+import { BossChanceOverrides, MOARConfig, MapSettings } from "../types";
 import { buildBossBasedWave } from "../spawnUtils";
 import { cloneDeep, shuffle } from "../utils";
-import { MapSettings } from "../types";
 
 const mapConfig = rawMapConfig as Record<string, MapSettings>;
 
-export function buildBossWaves(
-    config: MOARConfig,
-    locationList: ILocation[]
-): void {
+/**
+ * Builds boss wave spawns, with full support for:
+ * - Boss removal/overrides
+ * - Random raider/rogue group injection
+ * - Gradual boss invasion mode
+ * - Boss performance tuning
+ * - Custom spawn chances and forced zones
+ */
+export function buildBossWaves(config: MOARConfig, locationList: ILocation[]): void {
     const {
         randomRaiderGroup,
         randomRaiderGroupChance,
@@ -39,10 +44,11 @@ export function buildBossWaves(
         debug
     } = config;
 
-    const bossList = mainBossNameList.filter((b) => b !== "bossKnight");
+    const bossList = mainBossNameList.filter(b => b !== "bossKnight");
     const allBosses: Record<string, IBossLocationSpawn> = {};
     const strongestBossPerName: Record<string, IBossLocationSpawn> = {};
 
+    // Build global boss reference map
     for (const loc of locationList) {
         for (const boss of loc.base.BossLocationSpawn ?? []) {
             if (boss.BossName && !allBosses[boss.BossName]) {
@@ -62,17 +68,18 @@ export function buildBossWaves(
             continue;
         }
 
-        spawnList = spawnList.filter(
-            (b: IBossLocationSpawn) => !bossesToRemoveFromPool.has(b.BossName)
-        );
+        // Remove invalid bosses
+        spawnList = spawnList.filter(b => !bossesToRemoveFromPool.has(b.BossName));
 
+        // Apply performance tuning
         if (advancedConfig.EnableBossPerformanceImprovements) {
-            spawnList = spawnList.map((b: IBossLocationSpawn): IBossLocationSpawn => ({
+            spawnList = spawnList.map(b => ({
                 ...b,
                 ...(bossPerformanceHash[b.BossName] || {})
             }));
         }
 
+        // Inject raider/rogue wave
         if (randomRaiderGroup) {
             spawnList.push(buildBossBasedWave(
                 randomRaiderGroupChance,
@@ -107,6 +114,7 @@ export function buildBossWaves(
         location.base.BossLocationSpawn = spawnList;
     }
 
+    // Boss invasion mode
     if (!disableBosses && bossInvasion) {
         for (const name of bossList) {
             if (strongestBossPerName[name] && bossInvasionSpawnChance) {
@@ -115,22 +123,17 @@ export function buildBossWaves(
         }
 
         for (const loc of locationList) {
-            const existing = new Set(loc.base.BossLocationSpawn.map((b: IBossLocationSpawn) => b.BossName));
+            const existing = new Set(loc.base.BossLocationSpawn.map(b => b.BossName));
             existing.add("bossKnight");
 
             const additions = shuffle(Object.values(strongestBossPerName))
-                .filter((b: IBossLocationSpawn) => !existing.has(b.BossName))
-                .map((b: IBossLocationSpawn, i: number): IBossLocationSpawn => {
-                    const baseTime = i * 20 + 1;
-                    return {
-                        ...b,
-                        BossZone: "",
-                        BossEscortAmount: b.BossEscortAmount === "0" ? "0" : "1",
-                        Time: gradualBossInvasion
-                            ? baseTime
-                            : typeof b.Time === "number" && !isNaN(b.Time) ? b.Time : 0
-                    };
-                });
+                .filter(b => !existing.has(b.BossName))
+                .map((b, i) => ({
+                    ...b,
+                    BossZone: "",
+                    BossEscortAmount: b.BossEscortAmount === "0" ? "0" : "1",
+                    Time: gradualBossInvasion ? i * 20 + 1 : (typeof b.Time === "number" && !isNaN(b.Time) ? b.Time : 0)
+                }));
 
             loc.base.BossLocationSpawn.push(...additions);
         }
@@ -140,7 +143,7 @@ export function buildBossWaves(
 
     for (let i = 0; i < configLocations.length; i++) {
         const mapName = configLocations[i];
-        const spawns = locationList[i].base.BossLocationSpawn as IBossLocationSpawn[];
+        const spawns = locationList[i].base.BossLocationSpawn;
 
         if (!enableBossOverrides) continue;
 
@@ -149,7 +152,7 @@ export function buildBossWaves(
         const overrides: Record<string, number> = {};
 
         for (const [bossName, values] of Object.entries(rawOverrides)) {
-            if (typeof values === "object" && typeof values.BossChance === "number") {
+            if (typeof values?.BossChance === "number") {
                 overrides[bossName] = values.BossChance;
             }
         }
@@ -172,7 +175,7 @@ export function buildBossWaves(
 
         const newBosses = Object.keys(overrides)
             .filter(name => !applied.has(name) && allBosses[name])
-            .map((name): IBossLocationSpawn => {
+            .map(name => {
                 const spawn = cloneDeep(allBosses[name]!);
                 spawn.BossChance = overrides[name];
                 return spawn;
@@ -185,7 +188,7 @@ export function buildBossWaves(
         spawns.push(...newBosses);
 
         locationList[i].base.BossLocationSpawn = spawns
-            .map((b: IBossLocationSpawn): IBossLocationSpawn => {
+            .map(b => {
                 if (mainBossNameList.includes(b.BossName)) {
                     if (bossOpenZones) b.BossZone = "";
                     if (mainBossChanceBuff > 0 && b.BossChance < 100) {
@@ -193,13 +196,13 @@ export function buildBossWaves(
                     }
                 }
 
+                b.Time = typeof b.Time === "number" && !isNaN(b.Time) ? b.Time : 0;
+
                 const shouldSkip = (
                     b.BossChance < 1 ||
                     b.TriggerId ||
                     ["sectantPriest", "pmcBot"].includes(b.BossName)
                 );
-
-                b.Time = typeof b.Time === "number" && !isNaN(b.Time) ? b.Time : 0;
 
                 if (!shouldSkip && b.BossChance < 100 && Math.random() > b.BossChance / 100) {
                     b.BossChance = 0;
@@ -211,7 +214,7 @@ export function buildBossWaves(
 
                 return b;
             })
-            .filter((b: IBossLocationSpawn) => b.BossChance >= 1);
+            .filter(b => b.BossChance >= 1);
     }
 
     if (loggedHeader && debug?.logBossOverrides) {

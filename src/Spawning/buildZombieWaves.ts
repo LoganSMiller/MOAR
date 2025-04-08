@@ -26,12 +26,15 @@ export function buildZombieWaves(
 
     for (const type of zombieTypes) {
         const template = bots.types?.[type];
-        const health = template?.health?.BodyParts;
+        if (!template?.health?.BodyParts || !Array.isArray(template.health.BodyParts)) {
+            if (debug?.enabled) {
+                console.warn(`[MOAR] [ZOMBIE] Skipping health patch: missing BodyParts on bot template: ${type}`);
+            }
+            continue;
+        }
 
-        if (!health || !Array.isArray(health)) continue;
-
-        for (let i = 0; i < health.length; i++) {
-            health[i] = zombieBodyParts;
+        for (let i = 0; i < template.health.BodyParts.length; i++) {
+            template.health.BodyParts[i] = zombieBodyParts;
         }
 
         if (debug?.enabled) {
@@ -39,45 +42,40 @@ export function buildZombieWaves(
         }
     }
 
-    const mapSettingsList = Object.keys(mapConfig) as Array<keyof typeof mapConfig>;
+    const mapKeys = Object.keys(mapConfig) as Array<keyof typeof mapConfig>;
 
     for (let index = 0; index < locationList.length; index++) {
-        const location = locationList[index].base;
         const mapId = configLocations[index] as keyof typeof mapConfig;
         const mapSetting: MapSettings = mapConfig[mapId];
+        const location = locationList[index].base;
 
-        if (!mapSetting?.zombieWaveCount || mapSetting.zombieWaveCount <= 0) {
+        const waveCount = mapSetting?.zombieWaveCount ?? 0;
+        if (waveCount <= 0) {
             if (debug?.enabled) {
-                console.warn(`[MOAR] [ZOMBIE] Skipping ${mapId} — no valid zombieWaveCount in map config.`);
+                console.warn(`[MOAR] [ZOMBIE] Skipping ${mapId}: no zombieWaveCount defined`);
             }
             continue;
         }
 
         const rawEscape = location.EscapeTimeLimit;
         const baseEscape = defaultEscapeTimes[mapId] ?? 45;
-        const escapeTime = (typeof rawEscape === "number" && !isNaN(rawEscape)) ? rawEscape : baseEscape;
+        const escapeTime = typeof rawEscape === "number" && !isNaN(rawEscape) ? rawEscape : baseEscape;
         const escapeRatio = Math.round(escapeTime / baseEscape);
-        const totalWaves = Math.round(mapSetting.zombieWaveCount * zombieWaveQuantity * escapeRatio);
+        const totalWaves = Math.max(1, Math.round(waveCount * zombieWaveQuantity * escapeRatio));
 
-        if (debug?.enabled && escapeRatio !== 1) {
-            console.log(`[MOAR] [ZOMBIE] ${mapId} wave scaling: ${mapSetting.zombieWaveCount} × ${zombieWaveQuantity} × ${escapeRatio} = ${totalWaves}`);
+        if (debug?.enabled) {
+            console.log(`[MOAR] [ZOMBIE] ${mapId}: ${waveCount} × ${zombieWaveQuantity} × ${escapeRatio} = ${totalWaves}`);
         }
 
         const timeLimit = escapeTime * 60;
         const distribution = zombieWaveDistribution === 1 ? "random" : "even";
+        const fallbackTemplate = WildSpawnType.cursedAssault;
+        const zombieTemplate = validTemplates.includes("zombie") ? "zombie" : fallbackTemplate;
 
-        const zombieTemplate = validTemplates.includes("zombie") ? "zombie" : WildSpawnType.cursedAssault;
-
-        const zombieWaves = buildZombie(
-            totalWaves,
-            timeLimit,
-            distribution,
-            9999,
-            zombieTemplate
-        );
+        const zombieWaves = buildZombie(totalWaves, timeLimit, distribution, 9999, zombieTemplate);
 
         if (debug?.enabled) {
-            console.log(`[MOAR] [ZOMBIE] ${mapId} injected ${zombieWaves.length} zombie waves.`);
+            console.log(`[MOAR] [ZOMBIE] ${mapId}: Injecting ${zombieWaves.length} zombie waves using template: ${zombieTemplate}`);
         }
 
         const existing = location.BossLocationSpawn ?? [];

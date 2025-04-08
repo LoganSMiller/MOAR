@@ -1,11 +1,10 @@
-import { DependencyContainer } from "tsyringe";
-import { IPostSptLoadMod } from "@spt/models/external/IPostSptLoadMod";
-import { IPostDBLoadMod } from "@spt/models/external/IPostDBLoadMod";
-import { IPreSptLoadMod } from "@spt/models/external/IPreSptLoadMod";
-import { ILogger } from "@spt/models/spt/utils/ILogger";
-
 import fs from "fs";
 import path from "path";
+import { DependencyContainer } from "tsyringe";
+import { IPreSptLoadMod } from "@spt/models/external/IPreSptLoadMod";
+import { IPostDBLoadMod } from "@spt/models/external/IPostDBLoadMod";
+import { IPostSptLoadMod } from "@spt/models/external/IPostSptLoadMod";
+import { ILogger } from "@spt/models/spt/utils/ILogger";
 
 import globalValues from "./GlobalValues";
 import { setupRoutes } from "./Routes/routes";
@@ -14,8 +13,9 @@ import { buildWaves } from "./Spawning/Spawning";
 import checkPresetLogic from "./Tests/checkPresets";
 import { MOARConfig } from "./types";
 
-// === Config Paths and Defaults ===
+// === Config Paths ===
 const CONFIG_ROOT = path.resolve(__dirname, "../config");
+const spawnConfigFiles = ["playerSpawns", "pmcSpawns", "scavSpawns", "sniperSpawns"];
 
 const coreConfigFiles = [
     ["config.json", "config.default.json"],
@@ -26,9 +26,7 @@ const coreConfigFiles = [
     ["Presets.json", "Presets.default.json"]
 ];
 
-const spawnConfigFiles = ["playerSpawns", "pmcSpawns", "scavSpawns", "sniperSpawns"];
-
-// === Config Generation Helpers ===
+// === Safe config loading helpers ===
 function ensureConfigFile(target: string, fallback: string, logger: ILogger): void {
     const targetPath = path.join(CONFIG_ROOT, target);
     const fallbackPath = path.join(CONFIG_ROOT, fallback);
@@ -53,14 +51,13 @@ function ensureAllConfigs(logger: ILogger): void {
     }
 }
 
-// === Safe loader ===
-function loadConfigFile<T = any>(filename: string): T | null {
+function loadConfigFile<T = unknown>(filename: string): T | null {
     const fullPath = path.join(CONFIG_ROOT, filename);
     if (!fs.existsSync(fullPath)) return null;
 
     try {
         const raw = fs.readFileSync(fullPath, "utf-8");
-        return JSON.parse(raw);
+        return JSON.parse(raw) as T;
     } catch (e) {
         console.error(`[MOAR] Failed to load config: ${filename}`, e);
         return null;
@@ -119,19 +116,20 @@ function getDefaultConfig(): MOARConfig {
     };
 }
 
-function loadConfig(): MOARConfig {
-    const base = loadConfigFile<MOARConfig>("config.json");
+function loadMergedConfig(): MOARConfig {
+    const file = loadConfigFile<MOARConfig>("config.json");
     return {
         ...getDefaultConfig(),
-        ...(base ?? {})
+        ...(file ?? {})
     };
 }
 
-// === Entry Point ===
-const config = loadConfig();
+// === Load config once during init
+const config = loadMergedConfig();
 const enableBotSpawning = config.enableBotSpawning;
 
-class Moar implements IPostSptLoadMod, IPreSptLoadMod, IPostDBLoadMod {
+// === Main mod class
+class Moar implements IPreSptLoadMod, IPostDBLoadMod, IPostSptLoadMod {
     preSptLoad(container: DependencyContainer): void {
         if (enableBotSpawning) {
             setupRoutes(container);
@@ -149,6 +147,7 @@ class Moar implements IPostSptLoadMod, IPreSptLoadMod, IPostDBLoadMod {
         ensureAllConfigs(logger);
 
         if (!enableBotSpawning) {
+            logger.info("[MOAR] Bot spawning disabled — skipping init.");
             return;
         }
 
@@ -158,29 +157,29 @@ class Moar implements IPostSptLoadMod, IPreSptLoadMod, IPostDBLoadMod {
         try {
             checkPresetLogic(container);
         } catch {
-            logger.warning("[MOAR]  Preset validation skipped due to format changes or load error.");
+            logger.warning("[MOAR] Preset validation skipped due to format changes or load error.");
         }
 
         setTimeout(() => {
             const spawnsReady = globalValues.indexedMapSpawns && Object.keys(globalValues.indexedMapSpawns).length > 0;
             if (!spawnsReady) {
-                logger.error("[MOAR]  Cannot build waves — indexedMapSpawns is not ready.");
+                logger.error("[MOAR] Cannot build waves — indexedMapSpawns is not ready.");
                 return;
             }
 
             try {
                 buildWaves(container);
                 const presetName = globalValues.forcedPreset || "random";
-                logger.info(`[MOAR]  Waves built successfully using preset '${presetName}'.`);
+                logger.info(`[MOAR] Waves built successfully using preset '${presetName}'.`);
             } catch (e: unknown) {
                 const message = e && typeof e === "object" && "stack" in e
                     ? (e as Error).stack
                     : JSON.stringify(e, null, 2);
-                logger.error("[MOAR]  Error while building waves:\n" + message);
+                logger.error("[MOAR] Error while building waves:\n" + message);
             }
         }, 100);
 
-        logger.info("[MOAR]  Startup initialized. Bot spawning is enabled.");
+        logger.info("[MOAR] Startup complete. Bot spawning is enabled.");
     }
 }
 

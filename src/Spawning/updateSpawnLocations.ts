@@ -5,7 +5,17 @@ import { getRandomInArray } from "../utils";
 import globalValues from "../GlobalValues";
 import getSortedSpawnPointList from "./spawnZoneUtils";
 import type { MOARConfig } from "../types";
-import { EPlayerSide } from "@spt-aki/models/enums/EPlayerSide";
+
+/**
+ * Checks if a spawn is a valid player entry (Usec/Bear, Player category).
+ */
+function isPlayerSpawn(spawn: ISpawnPointParam): boolean {
+    return (
+        spawn?.Position != null &&
+        spawn.Categories?.includes("Player") &&
+        spawn.Sides?.some((s) => s === "Usec" || s === "Bear")
+    );
+}
 
 /**
  * Updates spawn zones to favor player-centric clustering.
@@ -19,7 +29,7 @@ export default function updateSpawnLocations(
     activeConfig: MOARConfig
 ): void {
     const maxPlayerSpawns = 12;
-    const maxDistanceSquared = 30 * 30;
+    const maxDistanceSq = 30 * 30;
 
     for (let index = 0; index < locationList.length; index++) {
         const mapName = configLocations[index];
@@ -27,20 +37,15 @@ export default function updateSpawnLocations(
 
         if (!Array.isArray(mapSpawns) || mapSpawns.length === 0) {
             if (activeConfig.debug?.enabled) {
-                console.warn(`[MOAR] Skipping spawn update for ${mapName}: no indexedMapSpawns found.`);
+                console.warn(`[MOAR] ⚠ Skipping spawn update for ${mapName}: indexedMapSpawns not found.`);
             }
             continue;
         }
 
-        const playerSpawns = mapSpawns.filter(spawn =>
-            spawn.Categories?.includes("Player") &&
-            spawn.Sides?.some((side: EPlayerSide) => side === EPlayerSide.Usec || side === EPlayerSide.Bear) &&
-            spawn.Position
-        );
-
+        const playerSpawns = mapSpawns.filter(isPlayerSpawn);
         if (playerSpawns.length === 0) {
             if (activeConfig.debug?.enabled) {
-                console.warn(`[MOAR] No valid player spawns for ${mapName}.`);
+                console.warn(`[MOAR] ⚠ No valid player spawns found for ${mapName}.`);
             }
             continue;
         }
@@ -48,7 +53,7 @@ export default function updateSpawnLocations(
         const selected = getRandomInArray(playerSpawns);
         if (!selected?.Position) {
             if (activeConfig.debug?.enabled) {
-                console.warn(`[MOAR] Invalid selected player spawn for ${mapName}.`);
+                console.warn(`[MOAR] ⚠ Invalid reference spawn for ${mapName}.`);
             }
             continue;
         }
@@ -56,41 +61,36 @@ export default function updateSpawnLocations(
         globalValues.playerSpawn ??= selected;
 
         const { x, y, z } = selected.Position;
-        const sortedSpawns = getSortedSpawnPointList(mapSpawns, x, y, z);
+        const sorted = getSortedSpawnPointList(mapSpawns, x, y, z);
 
         const clusteredPlayerSpawns: ISpawnPointParam[] = [];
-
-        for (const spawn of sortedSpawns) {
-            if (
-                !spawn.Categories?.includes("Player") ||
-                !spawn.Sides?.some((side: EPlayerSide) => side === EPlayerSide.Usec || side === EPlayerSide.Bear) ||
-                !spawn.Position
-            ) {
-                continue;
-            }
+        for (const spawn of sorted) {
+            if (!isPlayerSpawn(spawn)) continue;
 
             const dx = spawn.Position.x - x;
             const dy = spawn.Position.y - y;
             const dz = spawn.Position.z - z;
-            const distanceSq = dx * dx + dy * dy + dz * dz;
+            const distSq = dx * dx + dy * dy + dz * dz;
 
-            if (distanceSq <= maxDistanceSquared && clusteredPlayerSpawns.length < maxPlayerSpawns) {
+            if (distSq <= maxDistanceSq && clusteredPlayerSpawns.length < maxPlayerSpawns) {
                 clusteredPlayerSpawns.push(spawn);
             }
         }
 
-        const nonPlayerSpawns = sortedSpawns.filter(spawn =>
-            !spawn.Categories?.includes("Player") ||
-            !spawn.Sides?.some((side: EPlayerSide) => side === EPlayerSide.Usec || side === EPlayerSide.Bear)
-        );
+        const nonPlayerSpawns = sorted.filter(s => !isPlayerSpawn(s));
 
-        locationList[index].base.SpawnPointParams = [
-            ...clusteredPlayerSpawns,
-            ...nonPlayerSpawns
-        ];
+        const mergedSpawns = [...clusteredPlayerSpawns, ...nonPlayerSpawns];
+        locationList[index].base.SpawnPointParams = mergedSpawns;
+
+        // Update OpenZones from merged spawns
+        locationList[index].base.OpenZones = [
+            ...new Set(
+                mergedSpawns.map((p) => p.BotZoneName).filter((z): z is string => !!z)
+            )
+        ].join(",");
 
         if (activeConfig.debug?.enabled) {
-            console.log(`[MOAR] ${mapName}: using ${clusteredPlayerSpawns.length} clustered player spawns (of ${playerSpawns.length}).`);
+            console.log(`[MOAR] ✅ ${mapName}: Using ${clusteredPlayerSpawns.length} clustered player spawns (of ${playerSpawns.length}).`);
         }
     }
 }

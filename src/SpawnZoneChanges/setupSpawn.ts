@@ -3,7 +3,7 @@ import { DependencyContainer } from "tsyringe";
 import { ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
 
 import mapConfig from "../../config/mapConfig.json";
-import advancedConfig from "../../config/advancedConfig.json";
+import rawAdvancedConfig from "../../config/advancedConfig.json";
 
 import PlayerSpawnsRaw from "../../config/Spawns/playerSpawns.json";
 import PmcSpawnsRaw from "../../config/Spawns/pmcSpawns.json";
@@ -23,6 +23,8 @@ import {
 } from "../Spawning/spawnZoneUtils";
 import { updateAllBotSpawns } from "./updateUtils";
 import { shuffle } from "../utils";
+
+const advancedConfig = rawAdvancedConfig as typeof rawAdvancedConfig & { debug?: boolean };
 
 const PlayerSpawns = Object.fromEntries(
     Object.entries(PlayerSpawnsRaw).map(([key, points]) => [
@@ -88,8 +90,8 @@ export const setupSpawns = (container: DependencyContainer): void => {
         }
 
         base.SpawnPointParams ??= [];
-        const spawnParams = base.SpawnPointParams;
-        const isGZ = map.toLowerCase().includes("sandbox");
+        const spawnParams = base.SpawnPointParams as ISpawnPointParam[];
+        const isSandbox = map.toLowerCase().includes("sandbox");
         const configKey = configLocations[mapIndex] as keyof typeof mapConfig;
         const radiusLimit = mapConfig[configKey]?.spawnMinDistance ?? 20;
 
@@ -98,7 +100,7 @@ export const setupSpawns = (container: DependencyContainer): void => {
         let sniperSpawns: ISpawnPointParam[] = [];
         let pmcSpawns: ISpawnPointParam[] = [];
 
-        shuffle(spawnParams).forEach((point: ISpawnPointParam) => {
+        (shuffle(spawnParams) as ISpawnPointParam[]).forEach((point) => {
             if (point.Categories?.includes("Boss") || bossZoneList.has(point.BotZoneName)) {
                 bossSpawns.push(point);
             } else if (
@@ -113,7 +115,7 @@ export const setupSpawns = (container: DependencyContainer): void => {
             }
         });
 
-        if (isGZ) {
+        if (isSandbox) {
             sniperSpawns.forEach((point, i) => {
                 point.BotZoneName = i % 2 === 0 ? "ZoneSandSnipeCenter" : "ZoneSandSnipeCenter2";
             });
@@ -130,15 +132,16 @@ export const setupSpawns = (container: DependencyContainer): void => {
 
         if (!globalValues.playerSpawn && playerSpawns.length > 0) {
             globalValues.playerSpawn = playerSpawns[0];
-            if (advancedConfig.debug) {
-                console.log(`[MOAR] Set default globalValues.playerSpawn from ${map}: (${playerSpawns[0].Position.x}, ${playerSpawns[0].Position.y}, ${playerSpawns[0].Position.z})`);
+            if (advancedConfig?.debug) {
+                const { x, y, z } = playerSpawns[0].Position;
+                console.log(`[MOAR] Set default globalValues.playerSpawn from ${map}: (${x}, ${y}, ${z})`);
             }
         }
 
         scavSpawns = cleanClosest(AddCustomBotSpawnPoints(scavSpawns, map), mapIndex).map((point) =>
             applyColliderRadiusClamp({
                 ...point,
-                BotZoneName: isGZ ? "ZoneSandbox" : point.BotZoneName,
+                BotZoneName: isSandbox ? "ZoneSandbox" : point.BotZoneName,
                 Categories: ["Bot"],
                 Sides: ["Savage"],
                 CorePointId: 1
@@ -148,7 +151,7 @@ export const setupSpawns = (container: DependencyContainer): void => {
         pmcSpawns = cleanClosest(AddCustomPmcSpawnPoints(pmcSpawns, map), mapIndex).map((point) =>
             applyColliderRadiusClamp({
                 ...point,
-                BotZoneName: isGZ ? "ZoneSandbox" : point.BotZoneName,
+                BotZoneName: isSandbox ? "ZoneSandbox" : point.BotZoneName,
                 Categories: ["Coop"],
                 Sides: ["Usec", "Bear"],
                 CorePointId: 0
@@ -167,10 +170,7 @@ export const setupSpawns = (container: DependencyContainer): void => {
 
         indexedMapSpawns[map] = allSpawns;
         base.SpawnPointParams = allSpawns;
-
-        base.OpenZones = [
-            ...new Set(allSpawns.map(p => p.BotZoneName).filter(Boolean))
-        ].join(",");
+        base.OpenZones = [...new Set(allSpawns.map(p => p.BotZoneName).filter(Boolean))].join(",");
     }
 
     globalValues.indexedMapSpawns = indexedMapSpawns;
