@@ -39,7 +39,9 @@ export default function buildPmcs(
         }
 
         const location = locationList[index].base;
+        location.BotLocationModifier ??= {};
         location.BotLocationModifier.AdditionalHostilitySettings = defaultHostility;
+
 
         const {
             pmcHotZones = [],
@@ -86,7 +88,7 @@ export default function buildPmcs(
         const UsecZones = pmcZones.filter((_, i) => i % 2 === 0);
         const BearZones = pmcZones.filter((_, i) => i % 2 !== 0);
 
-        const UsecTemplate = validTemplates.includes("pmcUSEC") ? "pmcUSEC" : "assault";
+        const UsecTemplate = validTemplates.includes("pmcUsec") ? "pmcUsec" : "assault";
         const BearTemplate = validTemplates.includes("pmcBear") ? "pmcBear" : "assault";
 
         const timeLimit = (typeof escapeLimit === "number" ? escapeLimit : baseTime) * 60;

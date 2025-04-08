@@ -33,7 +33,9 @@ export function buildScavMarksmanWaves(
         }
 
         const location = locationList[index].base;
+        location.BotLocationModifier ??= {};
         location.BotLocationModifier.AdditionalHostilitySettings = defaultHostility;
+
 
         const {
             scavHotZones = [],
