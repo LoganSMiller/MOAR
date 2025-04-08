@@ -42,12 +42,27 @@ export function kebabToTitle(text: string): string {
 // === Deep Clone Utility ===
 export function cloneDeep<T>(value: T): T {
     try {
-        return JSON.parse(JSON.stringify(value));
-    } catch {
-        console.warn("[MOAR] ⚠ cloneDeep failed. Returning default value.");
-        return {} as T;
+        return JSON.parse(JSON.stringify(value, (_, val) => {
+            // Strip functions and undefined values before cloning
+            if (typeof val === "function" || typeof val === "undefined") return null;
+            return val;
+        }));
+    } catch (err) {
+        const raw = (() => {
+            try {
+                return JSON.stringify(value, null, 2);
+            } catch {
+                return "[Unserializable object]";
+            }
+        })();
+
+        console.warn(`[MOAR] ⚠ cloneDeep serialization failed: ${err instanceof Error ? err.message : err}`);
+        console.warn(`[MOAR] ⚠ Failed object:`, raw);
+        return Array.isArray(value) ? ([] as unknown as T) : ({} as T);
     }
 }
+
+
 
 // === Shuffle Utilities ===
 export function shuffle<T>(array: T[]): T[] {
@@ -140,23 +155,28 @@ export function setEscapeTimeOverrides(
     activeConfig: MOARConfig
 ): void {
     for (const loc of locations) {
+        if (!loc?.base?.Id) {
+            logger.warning(`[MOAR] ⏱ Missing loc.base.Id for a map, skipping escape time override.`);
+            continue;
+        }
+    
         const mapId = loc.base.Id;
-        const mapSettings = mapOverrides[mapId];
-        const overrideTime = mapSettings?.escapeTimeOverride;
+        const overrideTime = mapOverrides[mapId]?.escapeTimeOverride;
         const fallbackTime = defaultEscapeTimes[mapId as keyof typeof defaultEscapeTimes] ?? 45;
-
+    
         loc.base.EscapeTimeLimit = typeof overrideTime === "number"
             ? overrideTime
             : fallbackTime;
-
+    
         if (typeof overrideTime !== "number") {
             logger.warning(`[MOAR] ⏱ No escapeTimeOverride for ${mapId}, using fallback ${fallbackTime} min.`);
         }
-
+    
         if (activeConfig.debug?.enabled) {
             logger.info(`[MOAR] ⏱ ${mapId} escape time set to ${loc.base.EscapeTimeLimit} min`);
         }
     }
+    
 }
 
 // === Wave Spawn Sanity Check ===

@@ -6,6 +6,7 @@ import { ConfigTypes } from "@spt/models/enums/ConfigTypes";
 import { DependencyContainer } from "tsyringe";
 import { ILogger } from "@spt/models/spt/logging/ILogger";
 import { ILocationConfig } from "@spt/models/spt/config/ILocationConfig.d";
+import { IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
 
 import baseConfig from "../../config/config.json";
 import mapConfig from "../../config/mapConfig.json";
@@ -23,6 +24,25 @@ import { buildZombieWaves } from "./buildZombieWaves";
 import { buildScavMarksmanWaves } from "./buildScavMarksmanWaves";
 import buildPmcs from "./buildPmcs";
 import marksmanChanges from "./marksmanChanges";
+
+function assignDynamicConfigValues<TTarget extends object, TSource extends object>(
+    target: TTarget,
+    source: TSource,
+    label: string,
+    debug?: boolean
+): void {
+    for (const key of Object.keys(source)) {
+        const oldVal = (target as Record<string, unknown>)[key];
+        const newVal = (source as Record<string, unknown>)[key];
+        if (oldVal !== newVal) {
+            if (debug) {
+                console.log(`[MOAR] ${label} ${key} changed from ${oldVal} to ${newVal}`);
+            }
+            (target as Record<string, unknown>)[key] = newVal;
+        }
+    }
+}
+
 
 export const buildWaves = (container: DependencyContainer): void => {
     const configServer = container.resolve<ConfigServer>("ConfigServer");
@@ -48,25 +68,8 @@ export const buildWaves = (container: DependencyContainer): void => {
     config.spawnMinDistance ??= 60;
     config.spawnMaxDistance ??= 200;
 
-    for (const key of Object.keys(globalValues.overrideConfig)) {
-        const newVal = globalValues.overrideConfig[key];
-        if (config[key] !== newVal) {
-            if (config.debug?.enabled) {
-                console.log(`[MOAR] overrideConfig ${key} changed from ${config[key]} to ${newVal}`);
-            }
-            config[key] = newVal;
-        }
-    }
-
-    for (const key of Object.keys(preset)) {
-        const newVal = preset[key];
-        if (config[key] !== newVal) {
-            if (config.debug?.enabled) {
-                console.log(`[MOAR] preset ${globalValues.currentPreset}: ${key} changed from ${config[key]} to ${newVal}`);
-            }
-            config[key] = newVal;
-        }
-    }
+    assignDynamicConfigValues(config, globalValues.overrideConfig, "overrideConfig", config.debug?.enabled);
+    assignDynamicConfigValues(config, preset, `preset ${globalValues.currentPreset}`, config.debug?.enabled);
 
     // === Print applied preset for debugging ===
     console.log(globalValues.forcedPreset === "custom"
@@ -98,12 +101,25 @@ export const buildWaves = (container: DependencyContainer): void => {
 
     // === Reset base locations to safe snapshot ===
     if (!globalValues.locationsBase) {
-        globalValues.locationsBase = locationList.map(({ base }) => cloneDeep(base));
+        globalValues.locationsBase = locationList.map(({ base }, idx) => {
+            if (!base) {
+                console.warn(`[MOAR] ⚠ Missing base property for map at index ${idx}.`);
+                return {} as typeof base;
+            }
+            return cloneDeep(base);
+        });
     } else {
-        locationList = locationList.map((item, i) => ({
-            ...item,
-            base: cloneDeep(globalValues.locationsBase[i])
-        }));
+        locationList = locationList.map((item, i) => {
+            const originalBase = globalValues.locationsBase[i];
+            if (!originalBase) {
+                console.warn(`[MOAR] ⚠ Missing original base snapshot for map index ${i}.`);
+                return { ...item, base: {} };
+            }
+            return {
+                ...item,
+                base: cloneDeep(originalBase)
+            };
+        });
     }
 
     // === Disable PMC transform logic (forces consistent side types) ===
@@ -139,13 +155,26 @@ export const buildWaves = (container: DependencyContainer): void => {
 
     // === Build all bot types ===
     buildBossWaves(config, locationList);
+    if (locationList.some(loc => !loc?.base?.BossLocationSpawn)) {
+        logger.warning("[MOAR] ⚠ One or more boss wave lists failed to initialize properly.");
+    }
 
     if (config.zombiesEnabled) {
         buildZombieWaves(config, locationList, bots);
+        if (locationList.some(loc => !loc?.base?.BossLocationSpawn?.some((w: IBossLocationSpawn) => w?.BotSide === "Savage"))) {
+            logger.warning("[MOAR] ⚠ Zombie wave generation returned incomplete sets.");
+        }
     }
 
     buildPmcs(config, locationList);
+    if (locationList.some(loc => !loc?.base?.BossLocationSpawn?.some((w: IBossLocationSpawn) => w?.BotSide === "Usec" || w?.BotSide === "Bear"))) {
+        logger.warning("[MOAR] ⚠ PMC wave generation failed or returned empty sets.");
+    }
+
     buildScavMarksmanWaves(config, locationList, botConfig);
+    if (locationList.some(loc => !loc?.base?.BossLocationSpawn?.some((w: IBossLocationSpawn) => w?.BotSide === "Savage"))) {
+        logger.warning("[MOAR] ⚠ Scav/Marksman wave generation returned incomplete sets.");
+    }
 
     // === Optional smoothing pass ===
     if (config.spawnSmoothing) {

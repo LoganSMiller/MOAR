@@ -144,6 +144,7 @@ class Moar implements IPreSptLoadMod, IPostDBLoadMod, IPostSptLoadMod {
 
     postSptLoad(container: DependencyContainer): void {
         const logger = container.resolve<ILogger>("WinstonLogger");
+
         ensureAllConfigs(logger);
 
         if (!enableBotSpawning) {
@@ -156,7 +157,7 @@ class Moar implements IPreSptLoadMod, IPostDBLoadMod, IPostSptLoadMod {
 
         try {
             checkPresetLogic(container);
-        } catch {
+        } catch (e) {
             logger.warning("[MOAR] Preset validation skipped due to format changes or load error.");
         }
 
@@ -169,12 +170,13 @@ class Moar implements IPreSptLoadMod, IPostDBLoadMod, IPostSptLoadMod {
 
             try {
                 buildWaves(container);
-                const presetName = globalValues.forcedPreset || "random";
+                const presetName = globalValues.forcedPreset || config.defaultPreset;
                 logger.info(`[MOAR] Waves built successfully using preset '${presetName}'.`);
             } catch (e: unknown) {
-                const message = e && typeof e === "object" && "stack" in e
-                    ? (e as Error).stack
-                    : JSON.stringify(e, null, 2);
+                const message =
+                    e && typeof e === "object" && "stack" in e
+                        ? (e as Error).stack
+                        : JSON.stringify(e, null, 2);
                 logger.error("[MOAR] Error while building waves:\n" + message);
             }
         }, 100);

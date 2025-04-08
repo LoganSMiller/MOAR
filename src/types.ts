@@ -55,7 +55,7 @@ export interface MOARConfig {
     scavMarksmenEnabled?: boolean;
     pmcWavesEnabled?: boolean;
 
-    debug: {
+    debug?: {
         enabled: boolean;
         logSpawnData: boolean;
         logBossOverrides: boolean;
@@ -66,6 +66,7 @@ export interface MOARConfig {
  * Config preset override, partially extending base config
  */
 export interface MOARPresetConfig extends Partial<MOARConfig> {
+    [key: string]: unknown;
     label?: string;
     description?: string;
     enabled?: boolean;

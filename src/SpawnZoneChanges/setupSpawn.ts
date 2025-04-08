@@ -26,33 +26,17 @@ import { shuffle } from "../utils";
 
 const advancedConfig = rawAdvancedConfig as typeof rawAdvancedConfig & { debug?: boolean };
 
-const PlayerSpawns = Object.fromEntries(
-    Object.entries(PlayerSpawnsRaw).map(([key, points]) => [
+const mapSpawnsToIxyz = (raw: any): Record<string, Ixyz[]> => Object.fromEntries(
+    Object.entries(raw).map(([key, points]) => [
         key,
         (points as { x: number; y: number; z: number }[]).map(p => new Ixyz(p.x, p.y, p.z))
     ])
-) as Record<string, Ixyz[]>;
+);
 
-const PmcSpawns = Object.fromEntries(
-    Object.entries(PmcSpawnsRaw).map(([key, points]) => [
-        key,
-        (points as { x: number; y: number; z: number }[]).map(p => new Ixyz(p.x, p.y, p.z))
-    ])
-) as Record<string, Ixyz[]>;
-
-const ScavSpawns = Object.fromEntries(
-    Object.entries(ScavSpawnsRaw).map(([key, points]) => [
-        key,
-        (points as { x: number; y: number; z: number }[]).map(p => new Ixyz(p.x, p.y, p.z))
-    ])
-) as Record<string, Ixyz[]>;
-
-const SniperSpawns = Object.fromEntries(
-    Object.entries(SniperSpawnsRaw).map(([key, points]) => [
-        key,
-        (points as { x: number; y: number; z: number }[]).map(p => new Ixyz(p.x, p.y, p.z))
-    ])
-) as Record<string, Ixyz[]>;
+const PlayerSpawns = mapSpawnsToIxyz(PlayerSpawnsRaw);
+const PmcSpawns = mapSpawnsToIxyz(PmcSpawnsRaw);
+const ScavSpawns = mapSpawnsToIxyz(ScavSpawnsRaw);
+const SniperSpawns = mapSpawnsToIxyz(SniperSpawnsRaw);
 
 const bossZoneList = new Set([
     "Zone_Blockpost", "Zone_RoofRocks", "Zone_RoofContainers", "Zone_RoofBeach",
@@ -90,7 +74,8 @@ export const setupSpawns = (container: DependencyContainer): void => {
         }
 
         base.SpawnPointParams ??= [];
-        const spawnParams = base.SpawnPointParams as ISpawnPointParam[];
+        if (!Array.isArray(base.SpawnPointParams)) base.SpawnPointParams = [];
+
         const isSandbox = map.toLowerCase().includes("sandbox");
         const configKey = configLocations[mapIndex] as keyof typeof mapConfig;
         const radiusLimit = mapConfig[configKey]?.spawnMinDistance ?? 20;
@@ -100,20 +85,17 @@ export const setupSpawns = (container: DependencyContainer): void => {
         let sniperSpawns: ISpawnPointParam[] = [];
         let pmcSpawns: ISpawnPointParam[] = [];
 
-        (shuffle(spawnParams) as ISpawnPointParam[]).forEach((point) => {
+        for (const point of shuffle(base.SpawnPointParams)) {
             if (point.Categories?.includes("Boss") || bossZoneList.has(point.BotZoneName)) {
                 bossSpawns.push(point);
-            } else if (
-                point.BotZoneName?.toLowerCase()?.includes("snipe") ||
-                (map !== "lighthouse" && point.DelayToCanSpawnSec > 40)
-            ) {
+            } else if (point.BotZoneName?.toLowerCase()?.includes("snipe") || (map !== "lighthouse" && point.DelayToCanSpawnSec > 40)) {
                 sniperSpawns.push(point);
             } else if (point.Infiltration || point.Categories?.includes("Coop")) {
                 pmcSpawns.push(point);
             } else {
                 scavSpawns.push(point);
             }
-        });
+        }
 
         if (isSandbox) {
             sniperSpawns.forEach((point, i) => {
@@ -128,45 +110,27 @@ export const setupSpawns = (container: DependencyContainer): void => {
             SniperSpawns[map] = removeClosestSpawnsFromCustomBots(SniperSpawns, sniperSpawns, map, configKey);
         }
 
-        const playerSpawns = BuildCustomPlayerSpawnPoints(spawnParams, map);
+        const playerSpawns = BuildCustomPlayerSpawnPoints(base.SpawnPointParams, map);
 
         if (!globalValues.playerSpawn && playerSpawns.length > 0) {
             globalValues.playerSpawn = playerSpawns[0];
-            if (advancedConfig?.debug) {
+            if (advancedConfig.debug) {
                 const { x, y, z } = playerSpawns[0].Position;
-                console.log(`[MOAR] Set default globalValues.playerSpawn from ${map}: (${x}, ${y}, ${z})`);
+                console.log(`[MOAR] Default player spawn set (${map}): (${x}, ${y}, ${z})`);
             }
         }
 
-        scavSpawns = cleanClosest(AddCustomBotSpawnPoints(scavSpawns, map), mapIndex).map((point) =>
-            applyColliderRadiusClamp({
-                ...point,
-                BotZoneName: isSandbox ? "ZoneSandbox" : point.BotZoneName,
-                Categories: ["Bot"],
-                Sides: ["Savage"],
-                CorePointId: 1
-            }, radiusLimit)
+        scavSpawns = cleanClosest(AddCustomBotSpawnPoints(scavSpawns, map), mapIndex).map(p =>
+            applyColliderRadiusClamp({ ...p, BotZoneName: isSandbox ? "ZoneSandbox" : p.BotZoneName, Categories: ["Bot"], Sides: ["Savage"], CorePointId: 1 }, radiusLimit)
         );
 
-        pmcSpawns = cleanClosest(AddCustomPmcSpawnPoints(pmcSpawns, map), mapIndex).map((point) =>
-            applyColliderRadiusClamp({
-                ...point,
-                BotZoneName: isSandbox ? "ZoneSandbox" : point.BotZoneName,
-                Categories: ["Coop"],
-                Sides: ["Usec", "Bear"],
-                CorePointId: 0
-            }, radiusLimit)
+        pmcSpawns = cleanClosest(AddCustomPmcSpawnPoints(pmcSpawns, map), mapIndex).map(p =>
+            applyColliderRadiusClamp({ ...p, BotZoneName: isSandbox ? "ZoneSandbox" : p.BotZoneName, Categories: ["Coop"], Sides: ["Usec", "Bear"], CorePointId: 0 }, radiusLimit)
         );
 
         sniperSpawns = AddCustomSniperSpawnPoints(sniperSpawns, map);
 
-        const allSpawns = [
-            ...sniperSpawns.map(p => ({ ...p, type: "sniper" })),
-            ...bossSpawns.map(p => ({ ...p, type: "boss" })),
-            ...scavSpawns.map(p => ({ ...p, type: "scav" })),
-            ...pmcSpawns.map(p => ({ ...p, type: "pmc" })),
-            ...playerSpawns.map(p => ({ ...p, type: "player" }))
-        ];
+        const allSpawns = [...sniperSpawns, ...bossSpawns, ...scavSpawns, ...pmcSpawns, ...playerSpawns];
 
         indexedMapSpawns[map] = allSpawns;
         base.SpawnPointParams = allSpawns;

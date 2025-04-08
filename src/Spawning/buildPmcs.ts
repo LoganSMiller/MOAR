@@ -38,10 +38,21 @@ export default function buildPmcs(
             }
         }
 
-        const location = locationList[index].base;
-        location.BotLocationModifier ??= {};
-        location.BotLocationModifier.AdditionalHostilitySettings = defaultHostility;
+        const locationBase = locationList[index]?.base;
+        if (!locationBase) {
+            console.warn(`[MOAR] [PMC] Skipping ${map} - base not found.`);
+            continue;
+        }
 
+        locationBase.BotLocationModifier ??= { AdditionalHostilitySettings: [] };
+        locationBase.BotLocationModifier.AdditionalHostilitySettings = defaultHostility;
+
+        if (!Array.isArray(locationBase.SpawnPointParams) || locationBase.SpawnPointParams.length === 0) {
+            if (config.debug?.enabled) {
+                console.warn(`[MOAR] [PMC] ${map} missing SpawnPointParams. Skipping wave generation.`);
+            }
+            continue;
+        }
 
         const {
             pmcHotZones = [],
@@ -59,11 +70,12 @@ export default function buildPmcs(
                 console.log(`[MOAR] [PMC] Forcing Coop group to zone: ${globalValues.coopSpawnZone}`);
             }
         } else {
-            const candidates = location.SpawnPointParams.filter((p: ISpawnPointParam) =>
-                p.Categories?.includes("Coop") || p.Categories?.includes("Player")
+            const candidates: ISpawnPointParam[] = locationBase.SpawnPointParams.filter(
+                (p: ISpawnPointParam) =>
+                    p.Categories?.includes("Coop") || p.Categories?.includes("Player")
             );
             pmcZones = getSortedSpawnPointList(candidates, playerPos.x, playerPos.y, playerPos.z)
-                .map(p => p.BotZoneName || "fallback_zone");
+                .map((p: ISpawnPointParam) => p.BotZoneName || "fallback_zone");
         }
 
         looselyShuffle(pmcZones, 3);
@@ -76,7 +88,7 @@ export default function buildPmcs(
             pmcZones = shuffle(pmcZones);
         }
 
-        const escapeLimit = location.EscapeTimeLimit;
+        const escapeLimit = locationBase.EscapeTimeLimit;
         const baseTime = defaultEscapeTimes[map] ?? 45;
         const escapeRatio = Math.round((typeof escapeLimit === "number" ? escapeLimit : baseTime) / baseTime);
         const totalWaves = Math.max(1, Math.round(pmcWaveCount * config.pmcWaveQuantity * escapeRatio) + pmcHotZones.length);
@@ -95,7 +107,7 @@ export default function buildPmcs(
         const waveDistribution = config.pmcWaveDistribution === 1 ? "random" : "even";
         const half = Math.ceil(totalWaves / 2);
 
-        const UsecWaves = buildBotWaves({
+        const UsecWaves: IBossLocationSpawn[] = buildBotWaves({
             count: half,
             timeLimit,
             groupSize: config.pmcMaxGroupSize,
@@ -108,7 +120,7 @@ export default function buildPmcs(
             initialOffset: initialSpawnDelay + Math.round(Math.random() * 10)
         }, locationList[index]);
 
-        const BearWaves = buildBotWaves({
+        const BearWaves: IBossLocationSpawn[] = buildBotWaves({
             count: half,
             timeLimit,
             groupSize: config.pmcMaxGroupSize,
@@ -121,7 +133,7 @@ export default function buildPmcs(
             initialOffset: initialSpawnDelay + Math.round(Math.random() * 10)
         }, locationList[index]);
 
-        const allPmcs = [...UsecWaves, ...BearWaves];
+        const allPmcs: IBossLocationSpawn[] = [...UsecWaves, ...BearWaves];
 
         if (allPmcs.length && pmcHotZones.length) {
             for (const zone of pmcHotZones) {
@@ -133,9 +145,9 @@ export default function buildPmcs(
         }
 
         const seen = new Set<string>();
-        const existing = location.BossLocationSpawn ?? [];
+        const existing = locationBase.BossLocationSpawn ?? [];
 
-        const merged = [...existing, ...allPmcs].filter((wave): wave is IBossLocationSpawn => {
+        const merged: IBossLocationSpawn[] = [...existing, ...allPmcs].filter((wave: IBossLocationSpawn) => {
             const key = `${wave.BossName}-${wave.BossZone}-${wave.Time}`;
             if (seen.has(key)) return false;
             seen.add(key);
@@ -144,7 +156,7 @@ export default function buildPmcs(
             return true;
         });
 
-        location.BossLocationSpawn = merged;
+        locationBase.BossLocationSpawn = merged;
 
         if (config.debug?.enabled) {
             console.log(`[MOAR] [PMC] ${map} final wave count: ${merged.length}`);

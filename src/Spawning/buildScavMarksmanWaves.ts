@@ -1,6 +1,5 @@
 import { ILocation } from "@spt/models/eft/common/ILocation";
-import { WildSpawnType, ISpawnPointParam, IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
-
+import { IBossLocationSpawn, ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
 import mapConfig from "../../config/mapConfig.json";
 import { defaultEscapeTimes, defaultHostility, validTemplates } from "./constants";
 import { looselyShuffle, shuffle } from "../utils";
@@ -11,7 +10,7 @@ import globalValues from "../GlobalValues";
 import { IBotConfig } from "@spt/models/spt/config/IBotConfig.d";
 
 /**
- * Injects scav and marksman (sniper) waves across all supported maps.
+ * Safely builds and injects scav and marksman (sniper) waves across all supported maps.
  */
 export function buildScavMarksmanWaves(
     config: MOARConfig,
@@ -28,14 +27,25 @@ export function buildScavMarksmanWaves(
         if (!globalValues.indexedMapSpawns[map]) {
             globalValues.indexedMapSpawns[map] = [];
             if (config.debug?.enabled) {
-                console.warn(`[MOAR] Indexed spawns missing for ${map}, initialized empty.`);
+                console.warn(`[MOAR] [ScavMarksman] Indexed spawns missing for ${map}, initialized.`);
             }
         }
 
-        const location = locationList[index].base;
-        location.BotLocationModifier ??= {};
-        location.BotLocationModifier.AdditionalHostilitySettings = defaultHostility;
+        const locationBase = locationList[index]?.base;
+        if (!locationBase) {
+            console.warn(`[MOAR] [ScavMarksman] Skipping ${map} - base not found.`);
+            continue;
+        }
 
+        locationBase.BotLocationModifier ??= { AdditionalHostilitySettings: [] };
+        locationBase.BotLocationModifier.AdditionalHostilitySettings = defaultHostility;
+
+        if (!Array.isArray(locationBase.SpawnPointParams) || locationBase.SpawnPointParams.length === 0) {
+            if (config.debug?.enabled) {
+                console.warn(`[MOAR] [ScavMarksman] ${map} missing SpawnPointParams. Skipping wave generation.`);
+            }
+            continue;
+        }
 
         const {
             scavHotZones = [],
@@ -44,26 +54,41 @@ export function buildScavMarksmanWaves(
             initialSpawnDelay = 10
         } = mapSettings;
 
-        const { x, y, z } = globalValues.playerSpawn?.Position ?? { x: 0, y: 0, z: 0 };
+        const playerPos = globalValues.playerSpawn?.Position ?? { x: 0, y: 0, z: 0 };
 
         let scavZones = getSortedSpawnPointList(
-            location.SpawnPointParams.filter(p => p.Categories?.includes("Bot")),
-            x, y, z
-        ).map(p => p.BotZoneName || "zone_scav_fallback");
+            locationBase.SpawnPointParams.filter((p: ISpawnPointParam) =>
+                p.Categories?.includes("Bot")
+            ),
+            playerPos.x, playerPos.y, playerPos.z
+        ).map((p: ISpawnPointParam) => p.BotZoneName || "zone_scav_fallback");
 
         let sniperZones = getSortedSpawnPointList(
-            location.SpawnPointParams.filter(p => p.Categories?.includes("Bot")),
-            x, y, z
-        ).map(p => p.BotZoneName || "zone_sniper_fallback");
+            locationBase.SpawnPointParams.filter((p: ISpawnPointParam) =>
+                p.Categories?.includes("Bot")
+            ),
+            playerPos.x, playerPos.y, playerPos.z
+        ).map((p: ISpawnPointParam) => p.BotZoneName || "zone_sniper_fallback");
 
-        if (scavZones.length === 0) scavZones = ["zone_scav_fallback"];
-        if (sniperZones.length === 0) sniperZones = ["zone_sniper_fallback"];
+        if (scavZones.length === 0) {
+            scavZones = ["zone_scav_fallback"];
+            if (config.debug?.enabled) {
+                console.warn(`[MOAR] [ScavMarksman] ${map} - Defaulting scavZones to fallback.`);
+            }
+        }
+
+        if (sniperZones.length === 0) {
+            sniperZones = ["zone_sniper_fallback"];
+            if (config.debug?.enabled) {
+                console.warn(`[MOAR] [ScavMarksman] ${map} - Defaulting sniperZones to fallback.`);
+            }
+        }
 
         looselyShuffle(scavZones, 3);
         looselyShuffle(sniperZones, 2);
 
-        const escapeTime = typeof location.EscapeTimeLimit === "number" && !isNaN(location.EscapeTimeLimit)
-            ? location.EscapeTimeLimit
+        const escapeTime = typeof locationBase.EscapeTimeLimit === "number" && !isNaN(locationBase.EscapeTimeLimit)
+            ? locationBase.EscapeTimeLimit
             : defaultEscapeTimes[map] ?? 45;
 
         const escapeRatio = Math.round(escapeTime / (defaultEscapeTimes[map] ?? 45));
@@ -78,7 +103,7 @@ export function buildScavMarksmanWaves(
         const assaultTemplate = validTemplates.includes("assault") ? "assault" : "assault";
         const marksmanTemplate = validTemplates.includes("marksman") ? "marksman" : "marksman";
 
-        const scavWaves = buildBotWaves({
+        const scavWaves: IBossLocationSpawn[] = buildBotWaves({
             count: totalScavWaves,
             timeLimit,
             groupSize: config.scavMaxGroupSize,
@@ -92,7 +117,7 @@ export function buildScavMarksmanWaves(
             isScav: true
         }, locationList[index]);
 
-        const sniperWaves = buildBotWaves({
+        const sniperWaves: IBossLocationSpawn[] = buildBotWaves({
             count: totalSniperWaves,
             timeLimit,
             groupSize: config.sniperMaxGroupSize,
@@ -106,7 +131,7 @@ export function buildScavMarksmanWaves(
             isScav: true
         }, locationList[index]);
 
-        const allScavs = [...scavWaves, ...sniperWaves];
+        const allScavs: IBossLocationSpawn[] = [...scavWaves, ...sniperWaves];
 
         if (allScavs.length && scavHotZones.length) {
             for (const zone of scavHotZones) {
@@ -117,21 +142,22 @@ export function buildScavMarksmanWaves(
             }
         }
 
-        const existing = location.BossLocationSpawn ?? [];
+        const existing = locationBase.BossLocationSpawn ?? [];
         const seen = new Set<string>();
 
-        const merged = [...existing, ...allScavs].filter((wave): wave is IBossLocationSpawn => {
+        const merged: IBossLocationSpawn[] = [...existing, ...allScavs].filter((wave: IBossLocationSpawn) => {
             wave.Time = typeof wave.Time === "number" && !isNaN(wave.Time) ? wave.Time : 0;
             const key = `${wave.BossName}-${wave.BossZone}-${wave.Time}`;
             if (seen.has(key)) return false;
             seen.add(key);
+            wave.BossChance = Math.max(1, Math.min(100, wave.BossChance ?? 100));
             return true;
         });
 
-        location.BossLocationSpawn = merged;
+        locationBase.BossLocationSpawn = merged;
 
         if (config.debug?.enabled) {
-            console.log(`[MOAR] ${map}: Added ${allScavs.length} Scav+Sniper waves, final count: ${merged.length}`);
+            console.log(`[MOAR] [ScavMarksman] ${map}: Added ${allScavs.length} waves, final count: ${merged.length}`);
         }
     }
 }
