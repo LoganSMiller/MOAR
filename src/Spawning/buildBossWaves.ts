@@ -1,209 +1,100 @@
 import { ILocation } from "@spt/models/eft/common/ILocation";
 import { IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
 
-import rawBossConfig from "../../config/bossConfig.json";
-import advancedConfig from "../../config/advancedConfig.json";
-import rawMapConfig from "../../config/mapConfig.json";
-
+import { MOARConfig } from "../types";
 import {
     configLocations,
-    mainBossNameList,
-    bossesToRemoveFromPool,
     bossPerformanceHash,
     validBosses,
-    validTemplates
+    defaultEscapeTimes
 } from "./constants";
 
-import { BossChanceOverrides, MOARConfig, MapSettings } from "../types";
 import { buildBossBasedWave } from "../spawnUtils";
-import { cloneDeep, shuffle } from "../utils";
 
-const mapConfig = rawMapConfig as Record<string, MapSettings>;
-
+/**
+ * Injects boss waves into each map based on MOAR config rules.
+ * Supports main boss logic, boss invasions, and zone-aware injection.
+ */
 export function buildBossWaves(config: MOARConfig, locationList: ILocation[]): void {
-    const {
-        randomRaiderGroup,
-        randomRaiderGroupChance,
-        randomRogueGroup,
-        randomRogueGroupChance,
-        mainBossChanceBuff,
-        bossInvasion,
-        bossInvasionSpawnChance,
-        disableBosses,
-        bossOpenZones,
-        gradualBossInvasion,
-        enableBossOverrides,
-        debug
-    } = config;
-
-    const bossList = mainBossNameList.filter(b => b !== "bossKnight");
-    const allBosses: Record<string, IBossLocationSpawn> = {};
-    const strongestBossPerName: Record<string, IBossLocationSpawn> = {};
-
-    for (const loc of locationList) {
-        for (const boss of loc.base.BossLocationSpawn ?? []) {
-            if (boss.BossName && !allBosses[boss.BossName]) {
-                allBosses[boss.BossName] = boss;
-            }
-        }
-    }
-
     for (let i = 0; i < locationList.length; i++) {
         const location = locationList[i];
-        const mapName = configLocations[i];
-        const mapSettings = mapConfig[mapName];
-        let spawnList: IBossLocationSpawn[] = location.base.BossLocationSpawn ?? [];
+        const base = location?.base;
+        const mapId = configLocations[i];
 
-        if (disableBosses) {
-            location.base.BossLocationSpawn = [];
+        if (!base || typeof base !== "object") {
+            console.warn(`[MOAR] [Bosses] Skipping map at index ${i}: invalid base.`);
             continue;
         }
 
-        spawnList = spawnList.filter((b: IBossLocationSpawn) => !bossesToRemoveFromPool.has(b.BossName));
+        const escapeTime = typeof base.EscapeTimeLimit === "number" && Number.isFinite(base.EscapeTimeLimit)
+            ? base.EscapeTimeLimit
+            : defaultEscapeTimes[mapId] ?? 45;
 
-        if (advancedConfig.EnableBossPerformanceImprovements) {
-            spawnList = spawnList.map((b: IBossLocationSpawn) => ({
-                ...b,
-                ...(bossPerformanceHash[b.BossName] || {})
-            }));
+        const escapeTimeLimit = escapeTime * 60;
+        const newWaves: IBossLocationSpawn[] = [];
+
+        const zones = base.OpenZones?.split(",").filter(Boolean) ?? [];
+
+        if (!zones.length && config.debug?.enabled) {
+            console.warn(`[MOAR] [Bosses] No open zones found for ${mapId}, skipping boss injection.`);
         }
 
-        if (randomRaiderGroup) {
-            spawnList.push(buildBossBasedWave(
-                randomRaiderGroupChance,
-                "1,2,2,2,3",
-                validBosses.includes("pmcBot") ? "pmcBot" : validBosses[0],
-                validTemplates.includes("pmcBot") ? "pmcBot" : "normal",
-                "",
-                location.base.EscapeTimeLimit
-            ));
-        }
+        for (const bossName of validBosses) {
+            const perf = bossPerformanceHash[bossName] || {};
+            const baseChance = perf.BossChance ?? 0;
+            const bonus = config.mainBossChanceBuff ?? 0;
+            const finalChance = Math.min(100, baseChance + bonus);
 
-        if (randomRogueGroup) {
-            spawnList.push(buildBossBasedWave(
-                randomRogueGroupChance,
-                "1,2,2,2,3",
-                validBosses.includes("exUsec") ? "exUsec" : validBosses[0],
-                validTemplates.includes("exUsec") ? "exUsec" : "normal",
-                "",
-                location.base.EscapeTimeLimit
-            ));
-        }
+            const escortAmount = perf.BossEscortAmount ?? "0";
 
-        for (const boss of spawnList) {
-            if (mainBossNameList.includes(boss.BossName)) {
-                const current = strongestBossPerName[boss.BossName];
-                if (!current || current.BossChance < boss.BossChance) {
-                    strongestBossPerName[boss.BossName] = { ...boss };
-                }
+            // Inject boss invasion
+            if (config.bossInvasion && config.bossInvasionSpawnChance > 0 && zones.length > 0) {
+                const zone = zones[Math.floor(Math.random() * zones.length)];
+                const wave = buildBossBasedWave(
+                    config.bossInvasionSpawnChance,
+                    escortAmount,
+                    bossName,
+                    "normal",
+                    zone,
+                    escapeTimeLimit
+                );
+                newWaves.push(wave);
+            }
+
+            // Inject main boss wave if enabled
+            if (bonus > 0 && finalChance > 0 && zones.length > 0) {
+                const zone = zones[Math.floor(Math.random() * zones.length)];
+                const wave = buildBossBasedWave(
+                    finalChance,
+                    escortAmount,
+                    bossName,
+                    "normal",
+                    zone,
+                    escapeTimeLimit
+                );
+                newWaves.push(wave);
             }
         }
 
-        location.base.BossLocationSpawn = spawnList;
-    }
+        const existing = base.BossLocationSpawn ?? [];
+        const seen = new Set<string>();
 
-    if (!disableBosses && bossInvasion) {
-        for (const name of bossList) {
-            if (strongestBossPerName[name] && bossInvasionSpawnChance) {
-                strongestBossPerName[name].BossChance = bossInvasionSpawnChance;
-            }
+        const merged = [...existing, ...newWaves].filter((wave): wave is IBossLocationSpawn => {
+            const time = typeof wave.Time === "number" && Number.isFinite(wave.Time) ? wave.Time : 0;
+            wave.Time = time;
+
+            const key = `${wave.BossName}-${wave.BossZone}-${time}`;
+            if (seen.has(key)) return false;
+
+            seen.add(key);
+            wave.BossChance = Math.max(1, Math.min(100, wave.BossChance ?? 100));
+            return true;
+        });
+
+        base.BossLocationSpawn = merged;
+
+        if (config.debug?.enabled) {
+            console.log(`[MOAR] [Bosses] ${mapId}: Injected ${newWaves.length} boss waves. Final total: ${merged.length}`);
         }
-
-        for (const loc of locationList) {
-            const existing = new Set(loc.base.BossLocationSpawn.map((b: IBossLocationSpawn) => b.BossName));
-            existing.add("bossKnight");
-
-            const additions = shuffle(Object.values(strongestBossPerName))
-                .filter((b: IBossLocationSpawn) => !existing.has(b.BossName))
-                .map((b: IBossLocationSpawn, i: number) => ({
-                    ...b,
-                    BossZone: "",
-                    BossEscortAmount: b.BossEscortAmount === "0" ? "0" : "1",
-                    Time: gradualBossInvasion ? i * 20 + 1 : (typeof b.Time === "number" && !isNaN(b.Time) ? b.Time : 0)
-                }));
-
-            loc.base.BossLocationSpawn.push(...additions);
-        }
-    }
-
-    let loggedHeader = false;
-
-    for (let i = 0; i < configLocations.length; i++) {
-        const mapName = configLocations[i];
-        const spawns = locationList[i].base.BossLocationSpawn;
-
-        if (!enableBossOverrides) continue;
-
-        const bossConfig = rawBossConfig as Record<string, BossChanceOverrides>;
-        const rawOverrides = cloneDeep(bossConfig[mapName] || {});
-        const overrides: Record<string, number> = {};
-
-        for (const [bossName, values] of Object.entries(rawOverrides)) {
-            if (typeof values?.BossChance === "number") {
-                overrides[bossName] = values.BossChance;
-            }
-        }
-
-        const applied = new Set<string>();
-        for (const boss of spawns) {
-            const overrideChance = overrides[boss.BossName];
-            if (typeof overrideChance === "number") {
-                if (!loggedHeader && debug?.logBossOverrides) {
-                    console.log("[MOAR] Applying boss override values...");
-                    loggedHeader = true;
-                }
-                if (debug?.logBossOverrides) {
-                    console.log(`[MOAR] ${mapName} ${boss.BossName}: ${boss.BossChance} → ${overrideChance}`);
-                }
-                boss.BossChance = overrideChance;
-                applied.add(boss.BossName);
-            }
-        }
-
-        const newBosses = Object.keys(overrides)
-            .filter(name => !applied.has(name) && allBosses[name])
-            .map((name: string): IBossLocationSpawn => {
-                const spawn = cloneDeep(allBosses[name]!);
-                spawn.BossChance = overrides[name];
-                return spawn;
-            });
-
-        if (newBosses.length && debug?.logBossOverrides) {
-            console.log(`[MOAR] Injected bosses into ${mapName}: ${newBosses.map((b: IBossLocationSpawn) => b.BossName).join(", ")}`);
-        }
-
-        spawns.push(...newBosses);
-
-        locationList[i].base.BossLocationSpawn = spawns
-            .map((b: IBossLocationSpawn) => {
-                if (mainBossNameList.includes(b.BossName)) {
-                    if (bossOpenZones) b.BossZone = "";
-                    if (mainBossChanceBuff > 0 && b.BossChance < 100) {
-                        b.BossChance = Math.min(100, Math.round(b.BossChance + mainBossChanceBuff));
-                    }
-                }
-
-                b.Time = typeof b.Time === "number" && !isNaN(b.Time) ? b.Time : 0;
-
-                const shouldSkip =
-                    b.BossChance < 1 ||
-                    b.TriggerId !== undefined ||
-                    ["sectantPriest", "pmcBot"].includes(b.BossName);
-
-                if (!shouldSkip && b.BossChance < 100 && Math.random() > b.BossChance / 100) {
-                    b.BossChance = 0;
-                    b.ForceSpawn = false;
-                    b.IgnoreMaxBots = false;
-                } else {
-                    b.BossChance = Math.max(1, Math.min(100, b.BossChance));
-                }
-
-                return b;
-            })
-            .filter((b: IBossLocationSpawn) => b.BossChance >= 1);
-    }
-
-    if (loggedHeader && debug?.logBossOverrides) {
-        console.log("[MOAR] Boss override adjustment complete.");
     }
 }

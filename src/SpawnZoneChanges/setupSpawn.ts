@@ -1,7 +1,9 @@
-import { DatabaseServer } from "@spt/servers/DatabaseServer";
 import { DependencyContainer } from "tsyringe";
+import { DatabaseServer } from "@spt/servers/DatabaseServer";
+import { ILogger } from "@spt/models/spt/utils/ILogger";
 import { ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
 
+import globalValues from "../GlobalValues";
 import mapConfig from "../../config/mapConfig.json";
 import rawAdvancedConfig from "../../config/advancedConfig.json";
 
@@ -12,26 +14,27 @@ import SniperSpawnsRaw from "../../config/Spawns/sniperSpawns.json";
 
 import { Ixyz } from "../Models/Ixyz";
 import { configLocations, originalMapList } from "../Spawning/constants";
-import globalValues from "../GlobalValues";
 import {
     AddCustomBotSpawnPoints,
     AddCustomPmcSpawnPoints,
     AddCustomSniperSpawnPoints,
+    BuildCustomPlayerSpawnPoints,
     cleanClosest,
-    removeClosestSpawnsFromCustomBots,
-    BuildCustomPlayerSpawnPoints
+    removeClosestSpawnsFromCustomBots
 } from "../Spawning/spawnZoneUtils";
-import { updateAllBotSpawns } from "./updateUtils";
 import { shuffle } from "../utils";
+import { updateAllBotSpawns } from "./updateUtils";
 
 const advancedConfig = rawAdvancedConfig as typeof rawAdvancedConfig & { debug?: boolean };
 
-const mapSpawnsToIxyz = (raw: any): Record<string, Ixyz[]> => Object.fromEntries(
-    Object.entries(raw).map(([key, points]) => [
-        key,
-        (points as { x: number; y: number; z: number }[]).map(p => new Ixyz(p.x, p.y, p.z))
-    ])
-);
+function mapSpawnsToIxyz(raw: Record<string, { x: number; y: number; z: number }[]>): Record<string, Ixyz[]> {
+    return Object.fromEntries(
+        Object.entries(raw).map(([map, points]) => [
+            map,
+            points.map(p => new Ixyz(p.x, p.y, p.z))
+        ])
+    );
+}
 
 const PlayerSpawns = mapSpawnsToIxyz(PlayerSpawnsRaw);
 const PmcSpawns = mapSpawnsToIxyz(PmcSpawnsRaw);
@@ -44,48 +47,36 @@ const bossZoneList = new Set([
     "BotZoneGate1", "BotZoneGate2", "BotZoneBasement"
 ]);
 
-function applyColliderRadiusClamp(point: ISpawnPointParam, limit: number): ISpawnPointParam {
-    return {
-        ...point,
-        ColliderParams: {
-            ...point.ColliderParams,
-            _props: {
-                ...point.ColliderParams?._props,
-                Radius: Math.max(point.ColliderParams?._props?.Radius ?? 0, limit)
-            }
-        }
-    };
-}
-
-export const setupSpawns = (container: DependencyContainer): void => {
+export function setupSpawns(container: DependencyContainer): void {
     const databaseServer = container.resolve<DatabaseServer>("DatabaseServer");
+    const logger = container.resolve<ILogger>("WinstonLogger");
     const { locations } = databaseServer.getTables();
 
-    globalValues.indexedMapSpawns ??= {};
-    const indexedMapSpawns: Record<string, ISpawnPointParam[]> = {};
+    globalValues.indexedMapSpawns = {};
 
     for (let mapIndex = 0; mapIndex < originalMapList.length; mapIndex++) {
         const map = originalMapList[mapIndex];
-        const base = locations[map]?.base;
+        const location = locations[map];
+        const base = location?.base;
 
         if (!base) {
-            console.warn(`[MOAR] Skipping missing map: ${map}`);
+            logger.warning(`[MOAR] ⚠ Skipping missing map: ${map}`);
             continue;
         }
 
         base.SpawnPointParams ??= [];
-        if (!Array.isArray(base.SpawnPointParams)) base.SpawnPointParams = [];
 
         const isSandbox = map.toLowerCase().includes("sandbox");
         const configKey = configLocations[mapIndex] as keyof typeof mapConfig;
         const radiusLimit = mapConfig[configKey]?.spawnMinDistance ?? 20;
 
+        const allParams = shuffle(base.SpawnPointParams) as ISpawnPointParam[];
         const bossSpawns: ISpawnPointParam[] = [];
         let scavSpawns: ISpawnPointParam[] = [];
-        let sniperSpawns: ISpawnPointParam[] = [];
         let pmcSpawns: ISpawnPointParam[] = [];
+        let sniperSpawns: ISpawnPointParam[] = [];
 
-        for (const point of shuffle(base.SpawnPointParams)) {
+        for (const point of allParams) {
             if (point.Categories?.includes("Boss") || bossZoneList.has(point.BotZoneName)) {
                 bossSpawns.push(point);
             } else if (point.BotZoneName?.toLowerCase()?.includes("snipe") || (map !== "lighthouse" && point.DelayToCanSpawnSec > 40)) {
@@ -111,33 +102,53 @@ export const setupSpawns = (container: DependencyContainer): void => {
         }
 
         const playerSpawns = BuildCustomPlayerSpawnPoints(base.SpawnPointParams, map);
-
         if (!globalValues.playerSpawn && playerSpawns.length > 0) {
             globalValues.playerSpawn = playerSpawns[0];
             if (advancedConfig.debug) {
                 const { x, y, z } = playerSpawns[0].Position;
-                console.log(`[MOAR] Default player spawn set (${map}): (${x}, ${y}, ${z})`);
+                logger.info(`[MOAR] Default player spawn set for ${map}: (${x}, ${y}, ${z})`);
             }
         }
 
-        scavSpawns = cleanClosest(AddCustomBotSpawnPoints(scavSpawns, map), mapIndex).map(p =>
-            applyColliderRadiusClamp({ ...p, BotZoneName: isSandbox ? "ZoneSandbox" : p.BotZoneName, Categories: ["Bot"], Sides: ["Savage"], CorePointId: 1 }, radiusLimit)
-        );
+        scavSpawns = cleanClosest(AddCustomBotSpawnPoints(scavSpawns, map), mapIndex).map(p => ({
+            ...p,
+            BotZoneName: isSandbox ? "ZoneSandbox" : p.BotZoneName,
+            Categories: ["Bot"],
+            Sides: ["Savage"],
+            CorePointId: 1,
+            ColliderParams: {
+                _parent: "SpawnSphereParams",
+                _props: { Radius: radiusLimit }
+            }
+        }));
 
-        pmcSpawns = cleanClosest(AddCustomPmcSpawnPoints(pmcSpawns, map), mapIndex).map(p =>
-            applyColliderRadiusClamp({ ...p, BotZoneName: isSandbox ? "ZoneSandbox" : p.BotZoneName, Categories: ["Coop"], Sides: ["Usec", "Bear"], CorePointId: 0 }, radiusLimit)
-        );
+        pmcSpawns = cleanClosest(AddCustomPmcSpawnPoints(pmcSpawns, map), mapIndex).map(p => ({
+            ...p,
+            BotZoneName: isSandbox ? "ZoneSandbox" : p.BotZoneName,
+            Categories: ["Coop"],
+            Sides: ["Usec", "Bear"],
+            CorePointId: 0,
+            ColliderParams: {
+                _parent: "SpawnSphereParams",
+                _props: { Radius: radiusLimit }
+            }
+        }));
 
         sniperSpawns = AddCustomSniperSpawnPoints(sniperSpawns, map);
 
         const allSpawns = [...sniperSpawns, ...bossSpawns, ...scavSpawns, ...pmcSpawns, ...playerSpawns];
 
-        indexedMapSpawns[map] = allSpawns;
+        globalValues.indexedMapSpawns[map] = allSpawns;
         base.SpawnPointParams = allSpawns;
         base.OpenZones = [...new Set(allSpawns.map(p => p.BotZoneName).filter(Boolean))].join(",");
+
+        const playerCount = allSpawns.filter(p => p.Categories?.includes("Player")).length;
+        const coopCount = allSpawns.filter(p => p.Categories?.includes("Coop")).length;
+        const botCount = allSpawns.filter(p => p.Categories?.includes("Bot")).length;
+
+        logger.info(`[MOAR] ✅ ${map}: Injected ${allSpawns.length} spawns (Player: ${playerCount}, Coop: ${coopCount}, Bot: ${botCount})`);
     }
 
-    globalValues.indexedMapSpawns = indexedMapSpawns;
     globalValues.initialized = true;
 
     if (advancedConfig.ActivateSpawnCullingOnServerStart) {
@@ -147,5 +158,8 @@ export const setupSpawns = (container: DependencyContainer): void => {
         updateAllBotSpawns(SniperSpawns, "sniperSpawns");
     }
 
-    console.log(`[MOAR] ✅ Spawn setup completed. Maps initialized: ${Object.keys(indexedMapSpawns).length}`);
-};
+    console.log(`[MOAR] ✅ setupSpawns completed. Maps initialized: ${Object.keys(globalValues.indexedMapSpawns).length}`);
+    if (advancedConfig.debug) {
+        console.log("[MOAR] IndexedMapSpawns keys:", Object.keys(globalValues.indexedMapSpawns));
+    }
+}

@@ -7,22 +7,18 @@ import getSortedSpawnPointList from "./spawnZoneUtils";
 import type { MOARConfig } from "../types";
 
 /**
- * Checks if a spawn is a valid player entry (Usec/Bear, Player category).
+ * Determines if a spawn point is a valid player entry (Usec/Bear, Player category).
  */
 function isPlayerSpawn(spawn: ISpawnPointParam): boolean {
-    return (
-        spawn?.Position != null &&
+    return Boolean(
+        spawn?.Position &&
         spawn.Categories?.includes("Player") &&
         spawn.Sides?.some((s) => s === "Usec" || s === "Bear")
     );
 }
 
 /**
- * Updates spawn zones to favor player-centric clustering.
- * Ensures stability across vanilla, Coop, and Headless FIKA setups.
- *
- * @param locationList - The full list of game locations
- * @param activeConfig - The active MOAR config in use
+ * Updates spawn zones to prioritize clustered player spawns near the selected reference spawn.
  */
 export default function updateSpawnLocations(
     locationList: ILocation[],
@@ -33,11 +29,20 @@ export default function updateSpawnLocations(
 
     for (let index = 0; index < locationList.length; index++) {
         const mapName = configLocations[index];
-        const mapSpawns = globalValues.indexedMapSpawns?.[mapName];
+        const location = locationList[index];
+        const base = location?.base;
 
+        if (!base || !Array.isArray(base.SpawnPointParams)) {
+            if (activeConfig.debug?.enabled) {
+                console.warn(`[MOAR] ⚠ Skipping ${mapName}: invalid base or SpawnPointParams.`);
+            }
+            continue;
+        }
+
+        const mapSpawns = globalValues.indexedMapSpawns?.[mapName];
         if (!Array.isArray(mapSpawns) || mapSpawns.length === 0) {
             if (activeConfig.debug?.enabled) {
-                console.warn(`[MOAR] ⚠ Skipping spawn update for ${mapName}: indexedMapSpawns not found.`);
+                console.warn(`[MOAR] ⚠ Skipping ${mapName}: indexedMapSpawns missing or empty.`);
             }
             continue;
         }
@@ -50,21 +55,23 @@ export default function updateSpawnLocations(
             continue;
         }
 
-        const selected = getRandomInArray(playerSpawns);
-        if (!selected?.Position) {
+        const reference = getRandomInArray(playerSpawns);
+        if (!reference?.Position) {
             if (activeConfig.debug?.enabled) {
-                console.warn(`[MOAR] ⚠ Invalid reference spawn for ${mapName}.`);
+                console.warn(`[MOAR] ⚠ Invalid reference player spawn in ${mapName}.`);
             }
             continue;
         }
 
-        globalValues.playerSpawn ??= selected;
+        if (!globalValues.playerSpawn) {
+            globalValues.playerSpawn = reference;
+        }
 
-        const { x, y, z } = selected.Position;
-        const sorted = getSortedSpawnPointList(mapSpawns, x, y, z);
+        const { x, y, z } = reference.Position;
+        const sortedSpawns = getSortedSpawnPointList(mapSpawns, x, y, z);
 
         const clusteredPlayerSpawns: ISpawnPointParam[] = [];
-        for (const spawn of sorted) {
+        for (const spawn of sortedSpawns) {
             if (!isPlayerSpawn(spawn)) continue;
 
             const dx = spawn.Position.x - x;
@@ -77,20 +84,16 @@ export default function updateSpawnLocations(
             }
         }
 
-        const nonPlayerSpawns = sorted.filter(s => !isPlayerSpawn(s));
-
+        const nonPlayerSpawns = sortedSpawns.filter(p => !isPlayerSpawn(p));
         const mergedSpawns = [...clusteredPlayerSpawns, ...nonPlayerSpawns];
-        locationList[index].base.SpawnPointParams = mergedSpawns;
 
-        // Update OpenZones from merged spawns
-        locationList[index].base.OpenZones = [
-            ...new Set(
-                mergedSpawns.map((p) => p.BotZoneName).filter((z): z is string => !!z)
-            )
+        base.SpawnPointParams = mergedSpawns;
+        base.OpenZones = [
+            ...new Set(mergedSpawns.map(p => p.BotZoneName).filter(Boolean))
         ].join(",");
 
         if (activeConfig.debug?.enabled) {
-            console.log(`[MOAR] ✅ ${mapName}: Using ${clusteredPlayerSpawns.length} clustered player spawns (of ${playerSpawns.length}).`);
+            console.log(`[MOAR] ✅ ${mapName}: Using ${clusteredPlayerSpawns.length} clustered spawns (of ${playerSpawns.length}).`);
         }
     }
 }

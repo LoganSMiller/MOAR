@@ -3,26 +3,37 @@ import { HealthPart, HealthPartList } from "./types";
 
 const fallbackZone = "fallback_zone";
 
-/**
- * Ensures a valid numeric time value. Returns 0 if invalid.
- */
+/** Ensures a valid numeric time value. Returns 0 if invalid. */
 function safeTime(value: unknown): number {
     const num = typeof value === "number" ? value : Number(value);
-    return Number.isFinite(num) && !isNaN(num) ? num : 0;
+    if (Number.isFinite(num) && !isNaN(num)) return num;
+    console.warn("[MOAR] ⚠ Invalid time value encountered. Defaulting to 0.");
+    return 0;
 }
 
-/**
- * Logs a warning if a time value is unsafe. Dev/debug use only.
- */
+/** Logs a warning if a time value is unsafe. Dev/debug use only. */
 function assertTimeSafe(value: number, context = "Unknown"): void {
     if (!Number.isFinite(value) || isNaN(value)) {
         console.warn(`[MOAR] ⚠ Invalid time in ${context}:`, value);
     }
 }
 
-/**
- * Builds a spawn wave entry based on a boss name and template.
- */
+/** Options used to construct bot waves. */
+export interface BotWaveOptions {
+    count: number;
+    timeLimit: number;
+    groupSize: number;
+    groupChance: number;
+    zones: string[];
+    difficulty: string;
+    template: string;
+    forceSpawn?: boolean;
+    distribution?: "even" | "random";
+    initialOffset?: number;
+    isScav?: boolean;
+}
+
+/** Builds a boss-based spawn wave (used for bosses and invasions). */
 export function buildBossBasedWave(
     chance: number,
     escortAmount: string,
@@ -36,8 +47,7 @@ export function buildBossBasedWave(
     const isRogueOrRaider = ["exusec", "pmcbot", "arenafighter", "arenafighterevent"].includes(lowerName);
 
     const escortType = isScav ? "assault" : isRogueOrRaider ? "exUsec" : bossName;
-    const sides: ("Savage" | "Usec" | "Bear")[] = isScav ? ["Savage"] : ["Usec", "Bear"];
-
+    const sides: Array<"Savage" | "Usec" | "Bear"> = isScav ? ["Savage"] : ["Usec", "Bear"];
     const time = Math.floor(Math.random() * escapeTimeLimit);
     assertTimeSafe(time, "buildBossBasedWave");
 
@@ -68,26 +78,10 @@ export function buildBossBasedWave(
     };
 }
 
-export interface BotWaveOptions {
-    count: number;
-    timeLimit: number;
-    groupSize: number;
-    groupChance: number;
-    zones: string[];
-    difficulty: string;
-    template: string;
-    forceSpawn?: boolean;
-    distribution?: "even" | "random";
-    initialOffset?: number;
-    isScav?: boolean;
-}
-
-/**
- * Builds a list of bot wave entries (PMCs, Scavs, etc.) using timing and zone logic.
- */
+/** Builds generic bot waves such as PMC/Scav using provided options. */
 export function buildBotWaves(
     options: BotWaveOptions,
-    location: { base: { BossLocationSpawn: IBossLocationSpawn[] } }
+    location: { base: { BossLocationSpawn?: IBossLocationSpawn[] } }
 ): IBossLocationSpawn[] {
     const {
         count,
@@ -106,7 +100,7 @@ export function buildBotWaves(
     const waves: IBossLocationSpawn[] = [];
     const baseTime = count > 0 ? timeLimit / count : 0;
     const escortType = isScav ? "assault" : "exUsec";
-    const sides: ("Savage" | "Usec" | "Bear")[] = isScav ? ["Savage"] : ["Usec", "Bear"];
+    const sides: Array<"Savage" | "Usec" | "Bear"> = isScav ? ["Savage"] : ["Usec", "Bear"];
 
     for (let i = 0; i < count; i++) {
         const offset = distribution === "random" ? Math.random() * 10 : 0;
@@ -140,9 +134,7 @@ export function buildBotWaves(
     return waves;
 }
 
-/**
- * Builds a fixed set of zombie waves.
- */
+/** Builds zombie waves with fixed attributes. */
 export function buildZombie(
     count: number,
     timeLimit: number,
@@ -185,9 +177,7 @@ export function buildZombie(
     return waves;
 }
 
-/**
- * Returns a health profile with every part set to X percentage.
- */
+/** Builds a health profile with all parts scaled to the given percentage. */
 export function getHealthBodyPartsByPercentage(percentage: number): HealthPartList {
     const makePart = (value: number): HealthPart => ({ Current: value, Maximum: value });
 
@@ -202,11 +192,9 @@ export function getHealthBodyPartsByPercentage(percentage: number): HealthPartLi
     };
 }
 
-/**
- * Template identifiers considered zombie types.
- */
-export const zombieTypes: string[] = [
+/** Bot templates considered to be zombie variants. */
+export const zombieTypes = [
     "cursedAssault",
     "cursedAssaultTwo",
     "cursedAssaultBoss"
-];
+] as const;

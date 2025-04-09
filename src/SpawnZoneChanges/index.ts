@@ -18,7 +18,7 @@ const spawnRegistry: Record<BotSpawnType, Record<string, ISpawnPointParam[]>> = 
 
 /**
  * Returns spawn data for a specific bot type.
- * Logs a warning and returns empty if unknown.
+ * Logs a warning and returns empty object if unknown.
  */
 export function getSpawnData(type: string): Record<string, ISpawnPointParam[]> {
     const normalized = type.toLowerCase() as BotSpawnType;
@@ -31,12 +31,11 @@ export function getSpawnData(type: string): Record<string, ISpawnPointParam[]> {
 }
 
 /**
- * Flattens and returns all spawn points across all types and maps.
- * Filters out entries without Position or BotZoneName.
+ * Flattens and returns all valid spawn points across all types and maps.
  */
 export function getAllSpawnData(): ISpawnPointParam[] {
-    return Object.values(spawnRegistry).flatMap(mapSet =>
-        Object.values(mapSet).flat().filter(spawn =>
+    return Object.values(spawnRegistry).flatMap((mapSet) =>
+        Object.values(mapSet).flat().filter((spawn) =>
             spawn?.BotZoneName && spawn?.Position
         )
     );
@@ -44,7 +43,6 @@ export function getAllSpawnData(): ISpawnPointParam[] {
 
 /**
  * Validates spawn config structure and required fields.
- * Logs specific errors for missing values.
  */
 export function validateSpawns(): boolean {
     let isValid = true;
@@ -58,16 +56,17 @@ export function validateSpawns(): boolean {
                 continue;
             }
 
-            spawns.forEach((spawn, index) => {
+            for (let i = 0; i < spawns.length; i++) {
+                const spawn = spawns[i];
                 for (const field of requiredFields) {
-                    if (spawn[field] == null) {
+                    if (!spawn || spawn[field] == null) {
                         console.error(
-                            `${LOG_PREFIX} ❌ Missing field '${String(field)}' in ${type} spawn [${map}], index ${index}`
+                            `${LOG_PREFIX} ❌ Missing field '${field}' in ${type} spawn [${map}], index ${i}`
                         );
                         isValid = false;
                     }
                 }
-            });
+            }
         }
     }
 
@@ -75,7 +74,7 @@ export function validateSpawns(): boolean {
 }
 
 /**
- * Returns a count of spawn points by type.
+ * Returns a summary count of spawn points by type.
  */
 export function getSpawnSummary(): Record<BotSpawnType, number> {
     return {

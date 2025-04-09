@@ -27,26 +27,23 @@ function getSafeConfig(config: Record<string, any>): Record<string, any> {
         clone.debug = !!clone.debug.enabled;
     }
 
-    return JSON.parse(JSON.stringify(clone, (key, value) => {
+    return JSON.parse(JSON.stringify(clone, (_key, value) => {
         if (typeof value === "function") return undefined;
-        if (typeof value === "object" && value !== null) {
-            try {
-                JSON.stringify(value);
-            } catch {
-                return undefined;
-            }
+        try {
+            JSON.stringify(value);
+            return value;
+        } catch {
+            return undefined;
         }
-        return value;
     }));
 }
 
 export const setupRoutes = (container: DependencyContainer): void => {
     const staticRouter = container.resolve<StaticRouterModService>("StaticRouterModService");
     const dynamicRouter = new DynamicRouterModService(container);
-
     const register = staticRouter.registerStaticRouter.bind(staticRouter);
 
-    // === Config endpoints ===
+    // === Config Endpoints ===
     register("getDefaultConfig", [{
         url: "/moar/getDefaultConfig",
         action: async () => JSON.stringify(getSafeConfig(globalValues.baseConfig))
@@ -65,7 +62,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
         action: async () => JSON.stringify(getSafeConfig(globalValues.baseConfig))
     }]);
 
-    // === Preset selection ===
+    // === Preset Endpoints ===
     register("moarSetPreset", [{
         url: "/moar/setPreset",
         action: async (_url, body: SetPresetRequest) => {
@@ -73,8 +70,6 @@ export const setupRoutes = (container: DependencyContainer): void => {
             const isValid = name && name in PresetWeightingsConfig;
 
             globalValues.forcedPreset = isValid ? name : "random";
-
-
             buildWaves(container);
 
             return `Current Preset: ${kebabToTitle(globalValues.forcedPreset || "Random")}`;
@@ -111,7 +106,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
         }
     }]);
 
-    // === Manual config override injection ===
+    // === Manual Config Override ===
     register("setOverrideConfig", [{
         url: "/moar/setOverrideConfig",
         action: async (_url, overrideConfig: Record<string, unknown>) => {
@@ -126,7 +121,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
         }
     }]);
 
-    // === Custom spawn injection ===
+    // === Spawn Editing Endpoints ===
     register("moarAddBotSpawn", [{
         url: "/moar/addBotSpawn",
         action: async (_url, req: AddSpawnRequest) => {
@@ -143,7 +138,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
         }
     }]);
 
-    // === Server rebuild triggers ===
+    // === Lifecycle Rebuild Triggers ===
     register("moarReloadConfig", [{
         url: "/moar/reloadConfig",
         action: async () => {
@@ -169,7 +164,7 @@ export const setupRoutes = (container: DependencyContainer): void => {
         }
     }]);
 
-    // === Dynamic fallback route ===
+    // === Dynamic HTTP Support (optional fallback if needed) ===
     dynamicRouter.registerDynamicRouter("moarBuildWavesDynamic", [{
         route: "moar/buildWaves",
         action: async (_url, _info, _sessionId, output) => {

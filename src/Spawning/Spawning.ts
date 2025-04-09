@@ -1,128 +1,86 @@
-import { IBotConfig } from "@spt/models/spt/config/IBotConfig.d";
-import { IPmcConfig } from "@spt/models/spt/config/IPmcConfig.d";
-import { DatabaseServer } from "@spt/servers/DatabaseServer";
-import { ConfigServer } from "@spt/servers/ConfigServer";
-import { ConfigTypes } from "@spt/models/enums/ConfigTypes";
 import { DependencyContainer } from "tsyringe";
+import { ConfigServer } from "@spt/servers/ConfigServer";
+import { DatabaseServer } from "@spt/servers/DatabaseServer";
 import { ILogger } from "@spt/models/spt/logging/ILogger";
-import { ILocationConfig } from "@spt/models/spt/config/ILocationConfig.d";
-import { IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
+import { ConfigTypes } from "@spt/models/enums/ConfigTypes";
+import { IPmcConfig } from "@spt/models/spt/config/IPmcConfig";
+import { IBotConfig } from "@spt/models/spt/config/IBotConfig";
+import { ILocationConfig } from "@spt/models/spt/config/ILocationConfig";
 
-import baseConfig from "../../config/config.json";
+import globalValues from "../GlobalValues";
 import mapConfig from "../../config/mapConfig.json";
 import advancedConfig from "../../config/advancedConfig.json";
 
-import globalValues from "../GlobalValues";
-import { cloneDeep, getRandomPresetOrCurrentlySelectedPreset, saveToFile } from "../utils";
-import { originalMapList } from "./constants";
-
 import updateSpawnLocations from "./updateSpawnLocations";
-import { setEscapeTimeOverrides, enforceSmoothing } from "../utils";
-
 import { buildBossWaves } from "./buildBossWaves";
 import { buildZombieWaves } from "./buildZombieWaves";
-import { buildScavMarksmanWaves } from "./buildScavMarksmanWaves";
 import buildPmcs from "./buildPmcs";
+import { buildScavMarksmanWaves } from "./buildScavMarksmanWaves";
 import marksmanChanges from "./marksmanChanges";
 
-function assignDynamicConfigValues<TTarget extends object, TSource extends object>(
-    target: TTarget,
-    source: TSource,
-    label: string,
-    debug?: boolean
-): void {
-    for (const key of Object.keys(source)) {
-        const oldVal = (target as Record<string, unknown>)[key];
-        const newVal = (source as Record<string, unknown>)[key];
-        if (oldVal !== newVal) {
-            if (debug) {
-                console.log(`[MOAR] ${label} ${key} changed from ${oldVal} to ${newVal}`);
-            }
-            (target as Record<string, unknown>)[key] = newVal;
-        }
-    }
-}
+import {
+    originalMapList,
+} from "./constants";
 
+import {
+    cloneDeep,
+    enforceSmoothing,
+    getRandomPresetOrCurrentlySelectedPreset,
+    setEscapeTimeOverrides,
+} from "../utils";
 
+/**
+ * Entry point for MOAR wave generation. Applies config, resolves preset,
+ * assigns spawns, and populates each map's BossLocationSpawn with valid bot waves.
+ */
 export const buildWaves = (container: DependencyContainer): void => {
     const configServer = container.resolve<ConfigServer>("ConfigServer");
     const logger = container.resolve<ILogger>("WinstonLogger");
+    const databaseServer = container.resolve<DatabaseServer>("DatabaseServer");
+
     const pmcConfig = configServer.getConfig<IPmcConfig>(ConfigTypes.PMC);
     const botConfig = configServer.getConfig<IBotConfig>(ConfigTypes.BOT);
     const locationConfig = configServer.getConfig<ILocationConfig>(ConfigTypes.LOCATION);
-    const databaseServer = container.resolve<DatabaseServer>("DatabaseServer");
     const { locations, bots } = databaseServer.getTables();
 
-    // === Patch vanilla location behavior for safety ===
+    // === Reset SPT spawn modifiers ===
     locationConfig.rogueLighthouseSpawnTimeSettings.waitTimeSeconds = 60;
     locationConfig.enableBotTypeLimits = false;
     locationConfig.fitLootIntoContainerAttempts = 1;
     locationConfig.addCustomBotWavesToMaps = false;
     locationConfig.customWaves = { boss: {}, normal: {} };
 
-    // === Resolve config base + overrides + preset ===
+    // === Load config with active preset ===
     const config = cloneDeep(globalValues.baseConfig);
     const preset = getRandomPresetOrCurrentlySelectedPreset();
+    Object.assign(config, globalValues.overrideConfig, preset);
 
-    config.smoothingDistribution ??= 0.5;
-    config.spawnMinDistance ??= 60;
-    config.spawnMaxDistance ??= 200;
+    // === Set resolved preset name
+    const presetName = globalValues.forcedPreset || globalValues.currentPreset || config.defaultPreset || "live-like";
+    globalValues.currentPreset = presetName;
+    logger.info(`[MOAR] Using preset: '${presetName}'`);
 
-    assignDynamicConfigValues(config, globalValues.overrideConfig, "overrideConfig", config.debug?.enabled);
-    assignDynamicConfigValues(config, preset, `preset ${globalValues.currentPreset}`, config.debug?.enabled);
+    // === Fetch map locations from DB ===
+    const locationList = originalMapList.map((map) => {
+        const loc = locations[map];
+        if (!loc || !loc.base) {
+            logger.warning(`[MOAR] Missing or empty location base for ${map}, using fallback.`);
+            return { base: {} };
+        }
+        return loc;
+    });
 
-    // === Print applied preset for debugging ===
-    console.log(globalValues.forcedPreset === "custom"
-        ? "custom"
-        : globalValues.forcedPreset || globalValues.currentPreset);
-
-    // === Get location references from database ===
-    const {
-        bigmap: customs,
-        factory4_day: factoryDay,
-        factory4_night: factoryNight,
-        interchange,
-        laboratory,
-        lighthouse,
-        rezervbase,
-        shoreline,
-        tarkovstreets,
-        woods,
-        sandbox: gzLow,
-        sandbox_high: gzHigh
-    } = locations;
-
-    let locationList = [
-        customs, factoryDay, factoryNight,
-        interchange, laboratory, lighthouse,
-        rezervbase, shoreline, tarkovstreets,
-        woods, gzLow, gzHigh
-    ];
-
-    // === Reset base locations to safe snapshot ===
-    if (!globalValues.locationsBase) {
-        globalValues.locationsBase = locationList.map(({ base }, idx) => {
-            if (!base) {
-                console.warn(`[MOAR] ⚠ Missing base property for map at index ${idx}.`);
-                return {} as typeof base;
-            }
-            return cloneDeep(base);
-        });
+    // === Snapshot management ===
+    if (!globalValues.locationsBase || globalValues.locationsBase.length !== locationList.length) {
+        globalValues.locationsBase = locationList.map(loc => cloneDeep(loc.base));
+        logger.info("[MOAR] Created new locationsBase snapshot.");
     } else {
-        locationList = locationList.map((item, i) => {
-            const originalBase = globalValues.locationsBase[i];
-            if (!originalBase) {
-                console.warn(`[MOAR] ⚠ Missing original base snapshot for map index ${i}.`);
-                return { ...item, base: {} };
-            }
-            return {
-                ...item,
-                base: cloneDeep(originalBase)
-            };
-        });
+        for (let i = 0; i < locationList.length; i++) {
+            locationList[i].base = cloneDeep(globalValues.locationsBase[i]);
+        }
     }
 
-    // === Disable PMC transform logic (forces consistent side types) ===
+    // === Disable PMC transformations to avoid SPT conversions
     pmcConfig.convertIntoPmcChance = {
         default: {
             assault: { min: 0, max: 0 },
@@ -132,61 +90,58 @@ export const buildWaves = (container: DependencyContainer): void => {
             arenafighter: { min: 0, max: 0 },
             arenafighterevent: { min: 0, max: 0 },
             crazyassaultevent: { min: 0, max: 0 }
-        },
-        factory4_day: { assault: { min: 0, max: 0 } },
-        laboratory: { pmcbot: { min: 0, max: 0 } },
-        rezervbase: { pmcbot: { min: 0, max: 0 } }
+        }
     };
 
-    // === Override edge cases ===
+    // === Adjustments for presets with starting PMCs
     if (config.startingPmcs && (!config.randomSpawns || config.spawnSmoothing)) {
         logger.warning("[MOAR] Starting PMCs is on. Disabling smoothing and enforcing cascade spawns.");
         config.spawnSmoothing = false;
         config.randomSpawns = true;
     }
 
+    // === Apply difficulty rebalancing if enabled
     if (advancedConfig.MarksmanDifficultyChanges) {
         marksmanChanges(bots);
     }
 
-    // === Apply spawn changes ===
+    // === Core logic: assign spawn points and escape timers
     updateSpawnLocations(locationList, config);
     setEscapeTimeOverrides(locationList, mapConfig, logger, config);
 
-    // === Build all bot types ===
+    // === Build all supported wave types
     buildBossWaves(config, locationList);
-    if (locationList.some(loc => !loc?.base?.BossLocationSpawn)) {
-        logger.warning("[MOAR] ⚠ One or more boss wave lists failed to initialize properly.");
-    }
-
-    if (config.zombiesEnabled) {
-        buildZombieWaves(config, locationList, bots);
-        if (locationList.some(loc => !loc?.base?.BossLocationSpawn?.some((w: IBossLocationSpawn) => w?.BotSide === "Savage"))) {
-            logger.warning("[MOAR] ⚠ Zombie wave generation returned incomplete sets.");
-        }
-    }
-
+    buildZombieWaves(config, locationList, bots);
     buildPmcs(config, locationList);
-    if (locationList.some(loc => !loc?.base?.BossLocationSpawn?.some((w: IBossLocationSpawn) => w?.BotSide === "Usec" || w?.BotSide === "Bear"))) {
-        logger.warning("[MOAR] ⚠ PMC wave generation failed or returned empty sets.");
-    }
-
     buildScavMarksmanWaves(config, locationList, botConfig);
-    if (locationList.some(loc => !loc?.base?.BossLocationSpawn?.some((w: IBossLocationSpawn) => w?.BotSide === "Savage"))) {
-        logger.warning("[MOAR] ⚠ Scav/Marksman wave generation returned incomplete sets.");
-    }
 
-    // === Optional smoothing pass ===
     if (config.spawnSmoothing) {
         enforceSmoothing(locationList, config, logger);
     }
 
-    // === Write location updates back to the server ===
-    originalMapList.forEach((name, index) => {
-        if (!locations[name]) {
-            console.warn(`[MOAR] Missing map entry for: ${name}`);
-        } else {
-            locations[name] = locationList[index];
+    // === Final integrity validation per map
+    for (let i = 0; i < locationList.length; i++) {
+        const loc = locationList[i];
+        const base = loc.base;
+
+        if (!base || !Array.isArray(base.BossLocationSpawn)) {
+            logger.warning(`[MOAR] ${originalMapList[i]} had empty BossLocationSpawn.`);
+            continue;
         }
-    });
+
+        const pmcCount = base.BossLocationSpawn.filter(spawn =>
+            spawn.Sides?.includes("Usec") || spawn.Sides?.includes("Bear")
+        ).length;
+
+        if (!pmcCount && mapConfig[originalMapList[i]]?.allowPmcOnMap !== false) {
+            logger.warning(`[MOAR] ⚠ PMC wave generation failed for ${originalMapList[i]}.`);
+        }
+    }
+
+    // === Finalize DB overwrite
+    for (let i = 0; i < originalMapList.length; i++) {
+        locations[originalMapList[i]] = locationList[i];
+    }
+
+    logger.info(`[MOAR] ✅ Waves built successfully using preset '${presetName}'.`);
 };

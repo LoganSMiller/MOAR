@@ -13,9 +13,7 @@ import { buildWaves } from "./Spawning/Spawning";
 import checkPresetLogic from "./Tests/checkPresets";
 import { MOARConfig } from "./types";
 
-// === Config Paths ===
 const CONFIG_ROOT = path.resolve(__dirname, "../config");
-const spawnConfigFiles = ["playerSpawns", "pmcSpawns", "scavSpawns", "sniperSpawns"];
 
 const coreConfigFiles = [
     ["config.json", "config.default.json"],
@@ -26,7 +24,8 @@ const coreConfigFiles = [
     ["Presets.json", "Presets.default.json"]
 ];
 
-// === Safe config loading helpers ===
+const spawnConfigFiles = ["playerSpawns", "pmcSpawns", "scavSpawns", "sniperSpawns"];
+
 function ensureConfigFile(target: string, fallback: string, logger: ILogger): void {
     const targetPath = path.join(CONFIG_ROOT, target);
     const fallbackPath = path.join(CONFIG_ROOT, fallback);
@@ -45,7 +44,6 @@ function ensureAllConfigs(logger: ILogger): void {
     for (const [target, fallback] of coreConfigFiles) {
         ensureConfigFile(target, fallback, logger);
     }
-
     for (const name of spawnConfigFiles) {
         ensureConfigFile(`Spawns/${name}.json`, `Spawns/${name}.default.json`, logger);
     }
@@ -124,11 +122,10 @@ function loadMergedConfig(): MOARConfig {
     };
 }
 
-// === Load config once during init
+// === Global config for this session ===
 const config = loadMergedConfig();
 const enableBotSpawning = config.enableBotSpawning;
 
-// === Main mod class
 class Moar implements IPreSptLoadMod, IPostDBLoadMod, IPostSptLoadMod {
     preSptLoad(container: DependencyContainer): void {
         if (enableBotSpawning) {
@@ -159,6 +156,7 @@ class Moar implements IPreSptLoadMod, IPostDBLoadMod, IPostSptLoadMod {
             checkPresetLogic(container);
         } catch (e) {
             logger.warning("[MOAR] Preset validation skipped due to format changes or load error.");
+            logger.error(`[MOAR] Validation error: ${(e as Error).message}`);
         }
 
         setTimeout(() => {
@@ -171,13 +169,13 @@ class Moar implements IPreSptLoadMod, IPostDBLoadMod, IPostSptLoadMod {
             try {
                 buildWaves(container);
                 const presetName = globalValues.forcedPreset || config.defaultPreset;
-                logger.info(`[MOAR] Waves built successfully using preset '${presetName}'.`);
+                logger.info(`[MOAR] ✅ Waves built successfully using preset '${presetName}'.`);
             } catch (e: unknown) {
                 const message =
                     e && typeof e === "object" && "stack" in e
                         ? (e as Error).stack
                         : JSON.stringify(e, null, 2);
-                logger.error("[MOAR] Error while building waves:\n" + message);
+                logger.error("[MOAR] ❌ Error while building waves:\n" + message);
             }
         }, 100);
 

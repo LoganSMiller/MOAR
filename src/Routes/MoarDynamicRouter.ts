@@ -6,10 +6,10 @@ import { RouteAction } from "@spt/server/types/models/spt/mod/RouteAction";
  * Handles dynamic HTTP requests routed through SPT-AKI's DynamicRouterMod interface.
  */
 export class MoarDynamicRouter implements IDynamicRouterMod {
-    /** Route prefix (e.g. "moar" for routes like /moar/something) */
+    /** Top-level path prefix for this router (e.g., "moar") */
     private readonly topLevelRoute: string;
 
-    /** Registered route handlers mapped by route name */
+    /** Route handlers mapped by route string (e.g., "moar/buildWaves") */
     private readonly routeIndex: Map<string, RouteAction>;
 
     constructor(routes: RouteAction[], topLevelRoute: string) {
@@ -22,34 +22,34 @@ export class MoarDynamicRouter implements IDynamicRouterMod {
         }
     }
 
-    /** Returns the prefix path this router handles (e.g. "moar") */
+    /** Path prefix (used by AKI to mount dynamic router) */
     public getTopLevelRoute(): string {
         return this.topLevelRoute;
     }
 
-    /** Returns list of registered route names (e.g. ["moar/setPreset"]) */
+    /** List of supported route paths */
     public getHandledRoutes(): string[] {
         return [...this.routeIndex.keys()];
     }
 
-    /** Alias of getHandledRoutes used internally by SPT */
+    /** AKI internal method alias (must return same as getHandledRoutes) */
     public getInternalHandledRoutes(): string[] {
         return this.getHandledRoutes();
     }
 
-    /** Indicates whether this router can handle a specific incoming URL */
+    /** Whether this router handles the given URL */
     public canHandle(url: string): boolean {
         return this.getHandledRoutes().some(route => url.includes(route));
     }
 
-    /** Mod name for reference */
+    /** Returns mod name for logging/debugging */
     public getModName(): string {
         return "MOAR";
     }
 
     /**
-     * Handles the actual incoming request by executing the registered route handler.
-     * Falls back to returning the original output if no match or error occurs.
+     * Entry point: dispatches a matching route handler, if found.
+     * Falls back to original output if no match or if handler throws.
      */
     public async handleRequest(
         url: string,
@@ -60,15 +60,15 @@ export class MoarDynamicRouter implements IDynamicRouterMod {
         const matchedRoute = this.getHandledRoutes().find(route => url.includes(route));
         const handler = matchedRoute ? this.routeIndex.get(matchedRoute) : null;
 
-        if (!handler || typeof handler.action !== "function") {
-            console.warn(`[MOAR] ⚠ No dynamic route found for: ${url}`);
+        if (!handler?.action) {
+            console.warn(`[MOAR] ⚠ No matching dynamic route handler found for ${url}`);
             return output;
         }
 
         try {
             return await handler.action(url, info, sessionID, output);
         } catch (err) {
-            console.error(`[MOAR] ❌ Error in handler for route: /${matchedRoute}`, err);
+            console.error(`[MOAR] ❌ Error executing handler for /${matchedRoute}:`, err);
             return output;
         }
     }

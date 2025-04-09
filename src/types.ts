@@ -1,6 +1,10 @@
 /**
- * Core MOAR config structure, sourced from config.json
+ * === MOAR Mod Types ===
+ * Shared types for config structure, spawn templates,
+ * health overrides, wave building, and map-specific settings.
  */
+
+// === Core Config ===
 export interface MOARConfig {
     defaultPreset: string;
     enableBotSpawning: boolean;
@@ -21,6 +25,7 @@ export interface MOARConfig {
     pmcWaveQuantity: number;
     scavWaveQuantity: number;
     zombieWaveQuantity: number;
+
     pmcWaveDistribution: number;
     scavWaveDistribution: number;
     zombieWaveDistribution: number;
@@ -62,27 +67,20 @@ export interface MOARConfig {
     };
 }
 
-/**
- * Config preset override, partially extending base config
- */
+// === Config Preset Override ===
 export interface MOARPresetConfig extends Partial<MOARConfig> {
-    [key: string]: unknown;
     label?: string;
     description?: string;
     enabled?: boolean;
+    [key: string]: unknown;
 }
 
-/**
- * Health model for a single body part
- */
+// === Health Types ===
 export interface HealthPart {
     Current: number;
     Maximum: number;
 }
 
-/**
- * Full body part health breakdown
- */
 export interface HealthPartList {
     Head: HealthPart;
     Chest: HealthPart;
@@ -93,9 +91,7 @@ export interface HealthPartList {
     RightLeg: HealthPart;
 }
 
-/**
- * Per-boss override structure, e.g. per-map boss tuning
- */
+// === Per-boss override (used in bossConfig) ===
 export interface BossChanceOverrides {
     [bossName: string]: {
         BossChance?: number;
@@ -104,9 +100,18 @@ export interface BossChanceOverrides {
     };
 }
 
-/**
- * Configurable values specific to one map
- */
+// === Boss performance override logic ===
+export interface BossPerformanceOverride {
+    BossChance?: number;
+    BossEscortAmount?: string;
+    BossEscortType?: string;
+    DependKarma?: boolean;
+    TriggerId?: string;
+    TriggerName?: string;
+    RandomTimeSpawn?: boolean;
+}
+
+// === Map-specific configuration overrides ===
 export interface MapSettings {
     sniperQuantity?: number;
     initialSpawnDelay?: number;
@@ -122,29 +127,15 @@ export interface MapSettings {
     pmcHotZones?: string[];
     escapeTimeOverride?: number;
     allowPmcOnMap?: boolean;
+    sniperGroupChance?: number;
+    sniperMaxGroupSize?: number;
 }
 
-/**
- * Optional boss performance tuning patch
- */
-export interface BossPerformanceOverride {
-    BossChance?: number;
-    BossEscortAmount?: string;
-    BossEscortType?: string;
-    DependKarma?: boolean;
-    TriggerId?: string;
-    TriggerName?: string;
-    RandomTimeSpawn?: boolean;
-}
-
-/**
- * Bot side types (used in ISpawnPointParam.Sides)
- */
+// === Types used in wave + spawn building ===
 export type Side = "Savage" | "Usec" | "Bear";
 
-/**
- * Template roles used by MOAR for spawn logic
- */
+export type Difficulty = "easy" | "normal" | "hard" | "impossible";
+
 export type Category =
     | "assault"
     | "pmcbot"
@@ -167,8 +158,3 @@ export type Category =
     | "arenafighter"
     | "arenafighterevent"
     | "crazyassaultevent";
-
-/**
- * Difficulty modes applied to BossDifficult/BossEscortDifficult/etc.
- */
-export type Difficulty = "easy" | "normal" | "hard" | "impossible";

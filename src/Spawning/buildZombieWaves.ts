@@ -1,92 +1,88 @@
 import { ILocation } from "@spt/models/eft/common/ILocation";
-import { WildSpawnType } from "@spt/models/eft/common/ILocationBase";
-import { IBots } from "@spt/models/spt/bots/IBots";
+import { IBotType } from "@spt/models/spt/bots/IBotType";
+import { IBossLocationSpawn } from "@spt/models/eft/common/ILocationBase";
+import { MOARConfig, HealthPart } from "../types";
+import { buildZombie } from "../spawnUtils";
+import { defaultEscapeTimes } from "./constants";
+import globalValues from "../GlobalValues";
 
-import mapConfig from "../../config/mapConfig.json";
-import { configLocations, defaultEscapeTimes, validTemplates } from "./constants";
-import { buildZombie, getHealthBodyPartsByPercentage, zombieTypes } from "../spawnUtils";
-import { MapSettings, MOARConfig } from "../types";
+/** Runtime guard to ensure an object is a valid HealthPart */
+function isHealthPart(obj: unknown): obj is HealthPart {
+    return (
+        typeof obj === "object" &&
+        obj !== null &&
+        "Current" in obj &&
+        "Maximum" in obj &&
+        typeof (obj as any).Current === "number" &&
+        typeof (obj as any).Maximum === "number"
+    );
+}
 
 /**
- * Builds and injects zombie waves into each map based on configured quantity, distribution, and health.
+ * Injects zombie waves into maps with optional per-map health scaling.
  */
 export function buildZombieWaves(
     config: MOARConfig,
     locationList: ILocation[],
-    bots: IBots
+    bots: Record<string, IBotType>
 ): void {
-    const {
-        debug,
-        zombieWaveDistribution,
-        zombieWaveQuantity,
-        zombieHealth
-    } = config;
+    for (let i = 0; i < locationList.length; i++) {
+        const location = locationList[i];
+        const base = location?.base;
 
-    const zombieBodyParts = getHealthBodyPartsByPercentage(zombieHealth);
-
-    for (const type of zombieTypes) {
-        const template = bots.types?.[type];
-        if (!template?.health?.BodyParts || !Array.isArray(template.health.BodyParts)) {
-            if (debug?.enabled) {
-                console.warn(`[MOAR] [ZOMBIE] Skipping health patch: missing BodyParts on bot template: ${type}`);
-            }
+        if (!base) {
+            console.warn(`[MOAR] [Zombies] Skipping map index ${i} — base missing.`);
             continue;
         }
 
-        for (let i = 0; i < template.health.BodyParts.length; i++) {
-            template.health.BodyParts[i] = zombieBodyParts;
-        }
+        const mapId = base.Id ?? `map_${i}`;
+        const escapeMin = Number.isFinite(base.EscapeTimeLimit) ? base.EscapeTimeLimit : defaultEscapeTimes[mapId] ?? 45;
+        const timeLimit = escapeMin * 60;
+        const waveCount = Math.max(1, Math.round(config.zombieWaveQuantity));
 
-        if (debug?.enabled) {
-            console.log(`[MOAR] [ZOMBIE] Patched health for bot type: ${type}`);
-        }
-    }
+        const newWaves = buildZombie(waveCount, timeLimit);
+        const existing = base.BossLocationSpawn ?? [];
 
-    const mapKeys = Object.keys(mapConfig) as Array<keyof typeof mapConfig>;
-
-    for (let index = 0; index < locationList.length; index++) {
-        const mapId = configLocations[index] as keyof typeof mapConfig;
-        const mapSetting: MapSettings = mapConfig[mapId];
-        const location = locationList[index].base;
-
-        const waveCount = mapSetting?.zombieWaveCount ?? 0;
-        if (waveCount <= 0) {
-            if (debug?.enabled) {
-                console.warn(`[MOAR] [ZOMBIE] Skipping ${mapId}: no zombieWaveCount defined`);
-            }
-            continue;
-        }
-
-        const rawEscape = location.EscapeTimeLimit;
-        const baseEscape = defaultEscapeTimes[mapId] ?? 45;
-        const escapeTime = typeof rawEscape === "number" && !isNaN(rawEscape) ? rawEscape : baseEscape;
-        const escapeRatio = Math.round(escapeTime / baseEscape);
-        const totalWaves = Math.max(1, Math.round(waveCount * zombieWaveQuantity * escapeRatio));
-
-        if (debug?.enabled) {
-            console.log(`[MOAR] [ZOMBIE] ${mapId}: ${waveCount} × ${zombieWaveQuantity} × ${escapeRatio} = ${totalWaves}`);
-        }
-
-        const timeLimit = escapeTime * 60;
-        const distribution = zombieWaveDistribution === 1 ? "random" : "even";
-        const fallbackTemplate = WildSpawnType.cursedAssault;
-        const zombieTemplate = validTemplates.includes("zombie") ? "zombie" : fallbackTemplate;
-
-        const zombieWaves = buildZombie(totalWaves, timeLimit, distribution, 9999, zombieTemplate);
-
-        if (debug?.enabled) {
-            console.log(`[MOAR] [ZOMBIE] ${mapId}: Injecting ${zombieWaves.length} zombie waves using template: ${zombieTemplate}`);
-        }
-
-        const existing = location.BossLocationSpawn ?? [];
         const seen = new Set<string>();
+        const merged = [...existing, ...newWaves].filter((wave): wave is IBossLocationSpawn => {
+            const time = Number.isFinite(wave.Time) ? wave.Time : 0;
+            wave.Time = time;
 
-        location.BossLocationSpawn = [...existing, ...zombieWaves].filter(wave => {
-            wave.Time = typeof wave.Time === "number" && !isNaN(wave.Time) ? wave.Time : 0;
-            const key = `${wave.BossName}-${wave.BossZone}-${wave.Time}`;
+            const key = `${wave.BossName}-${wave.BossZone}-${time}`;
             if (seen.has(key)) return false;
+
             seen.add(key);
+            wave.BossChance = Math.max(1, Math.min(100, wave.BossChance ?? 100));
             return true;
         });
+
+        base.BossLocationSpawn = merged;
+
+        if (config.debug?.enabled) {
+            console.log(`[MOAR] [Zombies] ${mapId}: Injected ${newWaves.length} waves → Total: ${merged.length}`);
+        }
+
+        // === Zombie health scaling
+        const scalePct = config.zombieHealth;
+        if (typeof scalePct === "number" && scalePct > 0 && scalePct !== 100) {
+            const zombieBot = bots["cursedAssault"];
+            const bodyParts = zombieBot?.health?.BodyParts;
+
+            if (bodyParts && typeof bodyParts === "object") {
+                const scale = scalePct / 100;
+
+                for (const part of Object.values(bodyParts)) {
+                    if (isHealthPart(part)) {
+                        const scaled = Math.floor(part.Maximum * scale);
+                        part.Maximum = scaled;
+                        part.Current = scaled;
+                    }
+                }
+
+                if (config.debug?.enabled) {
+                    console.log(`[MOAR] [Zombies] ${mapId}: Scaled health to ${scalePct}%`);
+                }
+            }
+        }
     }
 }

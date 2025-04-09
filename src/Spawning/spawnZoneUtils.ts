@@ -7,23 +7,30 @@ import PmcSpawns from "../../config/Spawns/pmcSpawns.json";
 import ScavSpawns from "../../config/Spawns/scavSpawns.json";
 import SniperSpawns from "../../config/Spawns/sniperSpawns.json";
 
+// === Constants ===
+const DEFAULT_RADIUS = typeof config.spawnRadius === "number" ? config.spawnRadius : 20;
+const DEFAULT_DELAY = typeof config.spawnDelay === "number" ? config.spawnDelay : 4;
+
+// === Utility: UUID generator ===
 function uuidv4(): string {
     return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
         (+c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (+c / 4)))).toString(16)
     );
 }
 
-const DEFAULT_RADIUS = typeof config.spawnRadius === "number" ? config.spawnRadius : 20;
-const DEFAULT_DELAY = typeof config.spawnDelay === "number" ? config.spawnDelay : 4;
-
+// === Utility: Random Y-axis rotation ===
 function random360(): number {
     return Math.floor(Math.random() * 360);
 }
 
+// === Utility: Safe Ixyz coercion ===
 function safeIxyz(input: unknown): Ixyz {
     if (
-        typeof input === "object" && input !== null &&
-        "x" in input && "y" in input && "z" in input
+        typeof input === "object" &&
+        input !== null &&
+        "x" in input &&
+        "y" in input &&
+        "z" in input
     ) {
         const { x, y, z } = input as { x: number; y: number; z: number };
         return createIxyz({ x: Number(x) || 0, y: Number(y) || 0, z: Number(z) || 0 });
@@ -33,6 +40,7 @@ function safeIxyz(input: unknown): Ixyz {
     return createIxyz({ x: 0, y: 0, z: 0 });
 }
 
+// === Utility: Find closest BotZone ===
 export function getClosestZone(points: ISpawnPointParam[], x: number, y: number, z: number): string {
     let closest: ISpawnPointParam | undefined;
     let minDistance = Infinity;
@@ -56,6 +64,7 @@ export function getClosestZone(points: ISpawnPointParam[], x: number, y: number,
     return closest?.BotZoneName ?? "fallback_zone";
 }
 
+// === Utility: Sort spawn points by distance ===
 export function getSortedSpawnPointList(
     spawns: ISpawnPointParam[],
     x: number,
@@ -63,15 +72,16 @@ export function getSortedSpawnPointList(
     z: number
 ): ISpawnPointParam[] {
     return spawns
-        .filter((p: ISpawnPointParam) => !!p?.Position)
+        .filter(p => !!p?.Position)
         .slice()
-        .sort((a: ISpawnPointParam, b: ISpawnPointParam) => {
+        .sort((a, b) => {
             const distA = (a.Position.x - x) ** 2 + (a.Position.y - y) ** 2 + (a.Position.z - z) ** 2;
             const distB = (b.Position.x - x) ** 2 + (b.Position.y - y) ** 2 + (b.Position.z - z) ** 2;
             return distA - distB;
         });
 }
 
+// === Utility: Create a spawn point ===
 function createSpawnPoint(
     coords: Ixyz,
     zone: string,
@@ -97,6 +107,7 @@ function createSpawnPoint(
     };
 }
 
+// === Spawn Injectors ===
 export const AddCustomBotSpawnPoints = (
     spawnParams: ISpawnPointParam[],
     map: keyof typeof ScavSpawns
@@ -153,7 +164,7 @@ export const AddCustomSniperSpawnPoints = (
         return spawnParams;
     }
 
-    const newSpawns = custom.map((coords, i) =>
+    const newSpawns = custom.map(coords =>
         createSpawnPoint(
             safeIxyz(coords),
             getClosestZone(spawnParams, coords.x, coords.y, coords.z),
@@ -177,11 +188,10 @@ export const BuildCustomPlayerSpawnPoints = (
         return existing;
     }
 
-    const groupZone = `coop_player_group_all`;
     const newSpawns = custom.map((coords, i) =>
         createSpawnPoint(
             safeIxyz(coords),
-            `${groupZone}_${i}`,
+            `coop_player_group_all_${i}`,
             ["Player"],
             ["Usec", "Bear"],
             1,
@@ -190,11 +200,13 @@ export const BuildCustomPlayerSpawnPoints = (
     );
 
     if (config.debug) {
-        console.log(`[MOAR] ✅ Injected ${newSpawns.length} universal Coop player spawns into ${map}`);
+        console.log(`[MOAR] ✅ Injected ${newSpawns.length} Coop player spawns into ${map}`);
     }
 
     return [...existing, ...newSpawns];
 };
+
+// === Spawn Cleanup ===
 
 export function cleanClosest(
     spawns: ISpawnPointParam[],

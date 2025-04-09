@@ -7,7 +7,7 @@ const SPAWN_DIR = path.resolve(__dirname, "../../config/Spawns");
 const LOG_PREFIX = "[MOAR:SpawnUtils]";
 const DELETE_DISTANCE_THRESHOLD = 15;
 const GROUP_RADIUS = 8;
-const DEBUG = false;
+const DEBUG = process.env.MOAR_DEBUG === "true"; // Toggle logging via env variable
 
 export type BotSpawnType =
     | "player"
@@ -33,10 +33,14 @@ function clampDistance(xyz: Ixyz): Ixyz {
     const min = config.spawnMinDistance ?? 50;
     const max = config.spawnMaxDistance ?? 250;
     const distance = Math.sqrt(xyz.x ** 2 + xyz.z ** 2);
+
+    if (distance === 0) return xyz; // avoid divide-by-zero
+
     if (distance < min || distance > max) {
         const scale = Math.max(min, Math.min(max, distance)) / distance;
         return new Ixyz(xyz.x * scale, xyz.y, xyz.z * scale);
     }
+
     return xyz;
 }
 
@@ -53,7 +57,7 @@ export const updateJsonFile = <T>(
     filePath: string,
     callback: (jsonData: T) => void,
     successMessage: string
-): void => {
+): boolean => {
     try {
         ensureJsonFileExists(filePath);
         const raw = fs.readFileSync(filePath, "utf8");
@@ -63,9 +67,11 @@ export const updateJsonFile = <T>(
 
         fs.writeFileSync(filePath, JSON.stringify(jsonData, null, 2), "utf8");
         console.log(`${LOG_PREFIX} ${successMessage} → ${path.basename(filePath)}`);
+        return true;
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`${LOG_PREFIX} Failed to update ${filePath}:`, message);
+        return false;
     }
 };
 
@@ -73,11 +79,11 @@ export const updateBotSpawn = (
     map: string,
     value: Ixyz,
     type: BotSpawnType
-): void => {
+): boolean => {
     const filePath = path.join(SPAWN_DIR, `${type}Spawns.json`);
     const key = map.toLowerCase();
 
-    updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
+    return updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
         let adjusted = new Ixyz(value.x, value.y + 0.5, value.z);
         adjusted = clampDistance(adjusted);
 
@@ -87,13 +93,16 @@ export const updateBotSpawn = (
             const group = findGroupSpawn(adjusted, jsonData[key]);
 
             if (group.length > 0) {
-                // Force all players into the first group spawn's location
-                adjusted = group[0];
+                adjusted = group[0]; // All grouped spawns land on same core position
             } else {
                 jsonData[key].push(adjusted);
             }
         } else {
-            if (!jsonData[key].some(p => Math.abs(p.x - adjusted.x) < 0.01 && Math.abs(p.z - adjusted.z) < 0.01)) {
+            const isDuplicate = jsonData[key].some(p =>
+                Math.abs(p.x - adjusted.x) < 0.01 && Math.abs(p.z - adjusted.z) < 0.01
+            );
+
+            if (!isDuplicate) {
                 jsonData[key].push(adjusted);
             }
         }
@@ -104,11 +113,11 @@ export const deleteBotSpawn = (
     map: string,
     value: Ixyz,
     type: BotSpawnType
-): void => {
+): boolean => {
     const filePath = path.join(SPAWN_DIR, `${type}Spawns.json`);
     const key = map.toLowerCase();
 
-    updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
+    return updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
         const spawns = jsonData[key];
         if (!spawns?.length) {
             console.warn(`${LOG_PREFIX} No ${type} spawns found on '${map}' to delete.`);
@@ -149,11 +158,11 @@ function dedupeIxyzArray(points: Ixyz[]): Ixyz[] {
 export const updateAllBotSpawns = (
     values: Record<string, Ixyz[]>,
     targetType: BotSpawnType | string
-): void => {
+): boolean => {
     const safeType = targetType.toLowerCase();
     const filePath = path.join(SPAWN_DIR, `${safeType}Spawns.json`);
 
-    updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
+    return updateJsonFile<Record<string, Ixyz[]>>(filePath, (jsonData) => {
         for (const [map, rawPoints] of Object.entries(values)) {
             const clamped = rawPoints.map(clampDistance);
             const deduped = dedupeIxyzArray(clamped);

@@ -5,38 +5,34 @@ import { MoarDynamicRouter } from "../Routes/MoarDynamicRouter";
 
 /**
  * Service class for registering MOAR's dynamic routes into the SPT mod system.
- * Uses SPT's DynamicRouterMod infrastructure to bind custom /moar endpoints.
+ * Wraps SPT's `DynamicRouterMod` infrastructure using `MoarDynamicRouter`.
  */
 export class DynamicRouterModService {
-    private readonly container: DependencyContainer;
-
-    constructor(container: DependencyContainer) {
-        this.container = container;
-    }
+    constructor(private readonly container: DependencyContainer) {}
 
     /**
-     * Registers a new dynamic route handler under a shared route prefix (e.g., /moar/*).
+     * Registers a dynamic route handler under a top-level path (e.g., /moar).
      *
-     * @param name - Internal identifier to bind the router to the DI container
-     * @param routes - Array of route actions to attach
-     * @param topLevelRoute - Prefix route path (e.g. "moar" → becomes "/moar/*")
+     * @param name - Unique DI container key for this router
+     * @param routes - Array of route handlers to register
+     * @param topLevelRoute - Base path prefix (e.g., "moar" → `/moar/*`)
      */
     public registerDynamicRouter(
         name: string,
         routes: RouteAction[],
         topLevelRoute: string
     ): void {
-        if (!routes?.length) {
-            console.warn(`[MOAR] ⚠ Attempted to register dynamic router "${name}" with no routes.`);
+        if (!routes || routes.length === 0) {
+            console.warn(`[MOAR] ⚠ Skipping dynamic router "${name}" — no routes provided.`);
             return;
         }
 
         const router: IDynamicRouterMod = new MoarDynamicRouter(routes, topLevelRoute);
 
-        // Register router instance into the DI container
+        // Bind router instance to container
         this.container.registerInstance<IDynamicRouterMod>(name, router);
 
-        // Tag it as a dynamic route provider
+        // Register with AKI dynamic route system
         this.container.registerType("DynamicRoutes", name);
 
         console.log(`[MOAR] ✅ Dynamic router "${name}" registered under "/${topLevelRoute}"`);

@@ -1,40 +1,40 @@
-import { ILocationBase, ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
-import { MOARConfig } from "./types";
 import fs from "fs";
 import path from "path";
+import { ILocationBase, ISpawnPointParam } from "@spt/models/eft/common/ILocationBase";
+import { MOARConfig } from "./types";
 
-// === Config path ===
+// === Constants ===
 const CONFIG_PATH = path.resolve(__dirname, "../config/config.json");
 
-// === Safe config loader ===
-function loadConfigFile<T = unknown>(filePath: string): T | null {
-    try {
-        if (!fs.existsSync(filePath)) {
-            console.warn("[MOAR] Config file not found:", filePath);
-            return null;
-        }
+// === Safe JSON loader ===
+function loadConfigFile<T>(filePath: string): T | null {
+    if (!fs.existsSync(filePath)) {
+        console.warn("[MOAR] Config file not found:", filePath);
+        return null;
+    }
 
+    try {
         const raw = fs.readFileSync(filePath, "utf-8");
         return JSON.parse(raw) as T;
-    } catch (err: unknown) {
+    } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error("[MOAR] Failed to parse JSON from", filePath, "-", message);
+        console.error("[MOAR] Failed to parse JSON:", filePath, "-", message);
         return null;
     }
 }
 
-// === Initial config load ===
-let loadedConfig = loadConfigFile<MOARConfig>(CONFIG_PATH);
+// === Load initial config
+let loadedConfig: MOARConfig | null = loadConfigFile<MOARConfig>(CONFIG_PATH);
 if (!loadedConfig) {
     throw new Error("[MOAR] Cannot start — config.json is missing or invalid.");
 }
 
 const DEBUG = loadedConfig.debug?.enabled ?? false;
 if (DEBUG) {
-    console.log("[MOAR] Config loaded. Default preset:", loadedConfig.defaultPreset);
+    console.log("[MOAR] ✅ Config loaded. Default preset:", loadedConfig.defaultPreset);
 }
 
-// === Shared Global Singleton Type ===
+// === GlobalValues interface ===
 export interface GlobalValuesType {
     baseConfig: MOARConfig;
     overrideConfig: Partial<MOARConfig>;
@@ -47,41 +47,39 @@ export interface GlobalValuesType {
     coopSpawnZone?: string;
     initialized: boolean;
     modVersion: string;
-
-    // Optional: preload support for future UI/preset lists
     possiblePresets?: string[];
 
-    // Methods
     reloadConfig: () => void;
     clear: () => void;
 }
 
-// === Global State Instance ===
+// === Global Singleton ===
 const globalValues: GlobalValuesType = {
     baseConfig: loadedConfig,
     overrideConfig: {},
     locationsBase: [],
     currentPreset: "",
-    forcedPreset: loadedConfig.defaultPreset ?? "random",
+    forcedPreset: loadedConfig.defaultPreset || "random",
     addedMapZones: {},
     indexedMapSpawns: {},
     playerSpawn: undefined,
     coopSpawnZone: undefined,
     initialized: false,
     modVersion: "",
+    possiblePresets: [],
 
     reloadConfig(): void {
         const newConfig = loadConfigFile<MOARConfig>(CONFIG_PATH);
         if (!newConfig) {
-            console.error("[MOAR] Failed to reload config.json — keeping previous config.");
+            console.error("[MOAR] Failed to reload config — keeping previous values.");
             return;
         }
 
         this.baseConfig = newConfig;
-        this.forcedPreset = newConfig.defaultPreset ?? "random";
+        this.forcedPreset = newConfig.defaultPreset || "random";
 
         if (newConfig.debug?.enabled) {
-            console.log("[MOAR] baseConfig hot-reloaded. New preset:", this.forcedPreset);
+            console.log("[MOAR] 🔄 baseConfig hot-reloaded. New preset:", this.forcedPreset);
         }
     },
 
@@ -94,7 +92,7 @@ const globalValues: GlobalValuesType = {
         this.initialized = false;
 
         if (DEBUG) {
-            console.log("[MOAR] Global state cleared for new session or map load.");
+            console.log("[MOAR] 🧹 Global state cleared.");
         }
     }
 };
